@@ -5,11 +5,15 @@ export const metadata = {
   description: "Generate and share dynamic L4D2 tournament registration templates.",
 };
 
+import Providers from "@/components/Providers";
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );
