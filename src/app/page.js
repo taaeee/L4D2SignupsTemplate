@@ -38,15 +38,29 @@ export default function Home() {
       console.error("Error fetching accounts:", e);
     }
 
-    // Fetch Tournaments
-    const { data, error } = await supabase
+    // Fetch Tournaments (created)
+    const { data: createdTournaments, error: error1 } = await supabase
       .from("tournaments")
       .select("*")
       .eq("creator_id", session.user.id)
       .order("created_at", { ascending: false });
 
-    if (!error && data) {
-      setTournaments(data);
+    // Fetch Tournaments (moderated)
+    const { data: moderatedTournaments, error: error2 } = await supabase
+      .from("tournaments")
+      .select("*")
+      .contains("moderators", [session.user.id])
+      .order("created_at", { ascending: false });
+
+    if (!error1 && !error2) {
+      // Combine and remove duplicates
+      const allTournaments = [...(createdTournaments || []), ...(moderatedTournaments || [])];
+      const uniqueTournaments = Array.from(new Map(allTournaments.map(t => [t.id, t])).values());
+      uniqueTournaments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      setTournaments(uniqueTournaments);
+    } else {
+      console.error("Error fetching tournaments:", error1 || error2);
     }
     setIsLoading(false);
   };

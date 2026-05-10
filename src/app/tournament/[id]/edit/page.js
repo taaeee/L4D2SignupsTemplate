@@ -24,6 +24,8 @@ export default function EditTournament() {
   
   // New Mod Input
   const [newModId, setNewModId] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -59,6 +61,29 @@ export default function EditTournament() {
     }
     setModerators([...moderators, newModId.trim()]);
     setNewModId("");
+  };
+
+  const handleGenerateInvite = async () => {
+    setIsGeneratingLink(true);
+    setInviteLink("");
+    try {
+      const res = await fetch(`/api/tournament/${id}/mod-invite/generate`);
+      const data = await res.json();
+      if (res.ok) {
+        setInviteLink(data.inviteUrl);
+      } else {
+        alert(data.error || "Error al generar el enlace");
+      }
+    } catch (e) {
+      alert("Error de red");
+    }
+    setIsGeneratingLink(false);
+  };
+
+  const copyInviteLink = () => {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    alert("Enlace copiado al portapapeles");
   };
 
   const handleRemoveModerator = (modId) => {
@@ -166,12 +191,28 @@ export default function EditTournament() {
 
         {/* MODERATORS */}
         <div className="glass-panel" style={{ padding: "2rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.5rem" }}>
-            <Users size={24} color="var(--primary)" />
-            <h2 style={{ margin: 0, color: "var(--primary)" }}>Moderadores</h2>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Users size={24} color="var(--primary)" />
+              <h2 style={{ margin: 0, color: "var(--primary)" }}>Moderadores</h2>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={handleGenerateInvite} disabled={isGeneratingLink}>
+              {isGeneratingLink ? "Generando..." : "Generar Enlace de Invitación"}
+            </button>
           </div>
+
+          {inviteLink && (
+            <div style={{ background: "rgba(74, 222, 128, 0.1)", border: "1px solid var(--primary)", padding: "1rem", borderRadius: "8px", marginBottom: "1.5rem" }}>
+              <p className="text-sm text-success" style={{ marginBottom: "0.5rem", fontWeight: "bold" }}>Enlace generado (válido por 1 día):</p>
+              <div style={{ display: "flex", gap: "1rem" }}>
+                <input readOnly className="input-base" value={inviteLink} style={{ flex: 1, borderColor: "var(--primary)" }} />
+                <button type="button" className="btn btn-primary" onClick={copyInviteLink}>Copiar</button>
+              </div>
+            </div>
+          )}
+
           <p className="text-muted mb-4">
-            Añade el ID de la cuenta (UUID) de los usuarios a los que quieras darles permisos de moderación para editar y expulsar equipos/jugadores.
+            También puedes añadir el ID de la cuenta (UUID) manualmente si lo prefieres.
           </p>
           
           <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
@@ -183,7 +224,7 @@ export default function EditTournament() {
               style={{ flex: 1 }}
             />
             <button type="button" className="btn btn-secondary" onClick={handleAddModerator}>
-              Añadir
+              Añadir Manualmente
             </button>
           </div>
 
