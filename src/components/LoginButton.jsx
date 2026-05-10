@@ -1,6 +1,8 @@
 "use client";
 
-import { signIn, signOut, useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+import Link from "next/link";
+import { LogIn } from "lucide-react";
 
 export default function LoginButton() {
   const { data: session, status } = useSession();
@@ -28,16 +30,8 @@ export default function LoginButton() {
   }
 
   return (
-    <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center" }}>
-      <button className="btn btn-primary" onClick={() => signIn("steam")}>
-        Iniciar con Steam
-      </button>
-      <button className="btn btn-secondary" onClick={() => signIn("discord")}>
-        Iniciar con Discord
-      </button>
-      <button className="btn btn-secondary" style={{ backgroundColor: "#db4437", color: "white" }} onClick={() => signIn("google")}>
-        Iniciar con Google
-      </button>
-    </div>
+    <Link href="/login" className="btn btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+      <LogIn size={18} /> Iniciar Sesión
+    </Link>
   );
 }
