@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Save, Lock, Unlock, Users, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function EditTournament() {
   const { id } = useParams();
@@ -22,10 +24,17 @@ export default function EditTournament() {
   const [tStatus, setTStatus] = useState("open");
   const [moderators, setModerators] = useState([]);
   
+  // Extra Options
+  const [logoUrl, setLogoUrl] = useState("");
+  const [rules, setRules] = useState("");
+  const [socialLinks, setSocialLinks] = useState({ twitch: "", twitter: "", youtube: "", discord: "" });
+  const [isPrivate, setIsPrivate] = useState(false);
+  
   // New Mod Input
   const [newModId, setNewModId] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -39,7 +48,7 @@ export default function EditTournament() {
     const { data, error } = await supabase.from("tournaments").select("*").eq("id", id).single();
     if (data) {
       if (data.creator_id !== session?.user?.id) {
-        alert("No tienes permiso para editar este torneo.");
+        toast.error("No tienes permiso para editar este torneo.");
         router.push(`/tournament/${id}`);
         return;
       }
@@ -49,6 +58,13 @@ export default function EditTournament() {
       setMaxTeams(data.max_teams || 16);
       setTStatus(data.status || "open");
       setModerators(data.moderators || []);
+      
+      if (data.template_json) {
+        setLogoUrl(data.template_json.logo_url || "");
+        setRules(data.template_json.rules || "");
+        setSocialLinks(data.template_json.social_links || { twitch: "", twitter: "", youtube: "", discord: "" });
+        setIsPrivate(data.template_json.isPrivate || false);
+      }
     }
     setIsLoading(false);
   };
@@ -56,7 +72,7 @@ export default function EditTournament() {
   const handleAddModerator = () => {
     if (!newModId.trim()) return;
     if (moderators.includes(newModId.trim())) {
-      alert("Este usuario ya es moderador.");
+      toast.error("Este usuario ya es moderador.");
       return;
     }
     setModerators([...moderators, newModId.trim()]);
@@ -72,10 +88,10 @@ export default function EditTournament() {
       if (res.ok) {
         setInviteLink(data.inviteUrl);
       } else {
-        alert(data.error || "Error al generar el enlace");
+        toast.error(data.error || "Error al generar el enlace");
       }
     } catch (e) {
-      alert("Error de red");
+      toast.error("Error de red");
     }
     setIsGeneratingLink(false);
   };
@@ -83,7 +99,7 @@ export default function EditTournament() {
   const copyInviteLink = () => {
     if (!inviteLink) return;
     navigator.clipboard.writeText(inviteLink);
-    alert("Enlace copiado al portapapeles");
+    toast.success("Enlace copiado al portapapeles");
   };
 
   const handleRemoveModerator = (modId) => {
@@ -101,35 +117,42 @@ export default function EditTournament() {
         description,
         max_teams: maxTeams,
         status: tStatus,
-        moderators: moderators
+        moderators: moderators,
+        template_json: {
+          ...tournament.template_json,
+          logo_url: logoUrl,
+          rules,
+          social_links: socialLinks,
+          isPrivate
+        }
       })
       .eq("id", id);
 
     setIsSaving(false);
 
     if (error) {
-      alert("Error al guardar: " + error.message);
+      toast.error("Error al guardar: " + error.message);
     } else {
-      alert("¡Torneo actualizado con éxito!");
+      toast.success("¡Torneo actualizado con éxito!");
       router.push(`/tournament/${id}`);
     }
   };
 
-  const handleDeleteTournament = async () => {
-    if (!confirm("¿Estás 100% seguro de que deseas eliminar este torneo? Esto borrará TODOS los equipos y jugadores. Esta acción no se puede deshacer.")) {
-      return;
-    }
-
+  const executeDelete = async () => {
     setIsSaving(true);
     const { error } = await supabase.from("tournaments").delete().eq("id", id);
     
     if (error) {
-      alert("Error al eliminar: " + error.message);
+      toast.error("Error al eliminar: " + error.message);
       setIsSaving(false);
     } else {
-      alert("Torneo eliminado.");
+      toast.success("Torneo eliminado.");
       router.push("/");
     }
+  };
+
+  const handleDeleteTournament = () => {
+    setShowConfirmDelete(true);
   };
 
   if (status === "loading" || isLoading) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Cargando...</div>;
@@ -159,6 +182,49 @@ export default function EditTournament() {
               <label className="text-sm text-muted font-medium block mb-2">Límite de Equipos *</label>
               <input type="number" min="2" max="128" required className="input-base" value={maxTeams} onChange={e => setMaxTeams(parseInt(e.target.value))} />
             </div>
+            <div style={{ marginTop: "1.5rem" }}>
+              <label className="text-sm text-muted font-medium block mb-2">URL del Logo (Opcional)</label>
+              <input className="input-base" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://ejemplo.com/logo.png" />
+            </div>
+            <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input 
+                type="checkbox" 
+                id="private-tournament"
+                checked={isPrivate}
+                onChange={e => setIsPrivate(e.target.checked)}
+                style={{ width: "18px", height: "18px", cursor: "pointer" }}
+              />
+              <label htmlFor="private-tournament" className="text-sm text-main" style={{ cursor: "pointer" }}>
+                Torneo Privado (Oculto en Explorar)
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Social & Rules */}
+        <div className="glass-panel" style={{ padding: "2rem" }}>
+          <h2 style={{ marginBottom: "1.5rem", color: "var(--primary)" }}>Redes y Reglas (Opcional)</h2>
+          <div className="flex gap-4" style={{ flexWrap: "wrap", marginBottom: "1.5rem" }}>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Twitch</label>
+              <input className="input-base" value={socialLinks.twitch} onChange={e => setSocialLinks({...socialLinks, twitch: e.target.value})} placeholder="URL de Twitch" />
+            </div>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Twitter (X)</label>
+              <input className="input-base" value={socialLinks.twitter} onChange={e => setSocialLinks({...socialLinks, twitter: e.target.value})} placeholder="URL de Twitter" />
+            </div>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">YouTube</label>
+              <input className="input-base" value={socialLinks.youtube} onChange={e => setSocialLinks({...socialLinks, youtube: e.target.value})} placeholder="URL de YouTube" />
+            </div>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Discord</label>
+              <input className="input-base" value={socialLinks.discord} onChange={e => setSocialLinks({...socialLinks, discord: e.target.value})} placeholder="URL de Discord" />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-muted font-medium block mb-2">Página de Reglas (Markdown soportado o Texto Libre)</label>
+            <textarea className="input-base" value={rules} onChange={e => setRules(e.target.value)} placeholder="Escribe las reglas completas aquí..." style={{ minHeight: "150px" }} />
           </div>
         </div>
 
@@ -260,6 +326,16 @@ export default function EditTournament() {
           </div>
         </div>
       </form>
+
+      <ConfirmModal 
+        isOpen={showConfirmDelete}
+        title="Eliminar Torneo"
+        message="¿Estás 100% seguro de que deseas eliminar este torneo? Esto borrará TODOS los equipos y jugadores. Esta acción no se puede deshacer."
+        confirmText="Sí, Eliminar"
+        isDanger={true}
+        onConfirm={executeDelete}
+        onCancel={() => setShowConfirmDelete(false)}
+      />
     </div>
   );
 }

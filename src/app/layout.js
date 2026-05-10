@@ -9,6 +9,7 @@ export const metadata = {
 import Providers from "@/components/Providers";
 import Link from "next/link";
 import { Home } from "lucide-react";
+import { Toaster } from "sonner";
 
 export default function RootLayout({ children }) {
   return (
@@ -41,6 +42,7 @@ export default function RootLayout({ children }) {
             </Link>
           </nav>
           {children}
+          <Toaster theme="dark" position="bottom-right" />
         </Providers>
       </body>
     </html>

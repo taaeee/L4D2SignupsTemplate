@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import { Plus, Trash2, Upload, Users, X } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 
 export default function RegisterTeam() {
   const { id } = useParams();
@@ -30,7 +31,7 @@ export default function RegisterTeam() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      alert("Debes iniciar sesión para registrar un equipo.");
+      toast.error("Debes iniciar sesión para registrar un equipo.");
       router.push("/");
     } else if (status === "authenticated" && id) {
       fetchData();
@@ -42,7 +43,7 @@ export default function RegisterTeam() {
     if (data) {
       setTournament(data);
       if (data.status === "locked") {
-        alert("Las inscripciones para este torneo están cerradas.");
+        toast.error("Las inscripciones para este torneo están cerradas.");
         router.push(`/tournament/${id}`);
         return;
       }
@@ -54,7 +55,7 @@ export default function RegisterTeam() {
         .eq("tournament_id", id);
         
       if (count >= 300) {
-        alert("Se ha alcanzado el límite máximo de registros (300) para este torneo.");
+        toast.error("Se ha alcanzado el límite máximo de registros (300) para este torneo.");
         router.push(`/tournament/${id}`);
         return;
       }
@@ -79,7 +80,7 @@ export default function RegisterTeam() {
         const res = await fetch("/api/steam/friends");
         const data = await res.json();
         if (data.error) {
-          alert(data.error);
+          toast.error(data.error);
         } else {
           setFriends(data.friends || []);
         }
@@ -94,7 +95,7 @@ export default function RegisterTeam() {
   const selectFriend = (friend) => {
     if (activePlayerIndex === -1) {
       if (players.length >= (tournament?.template_json?.maxPlayers || 8)) {
-        alert("El equipo está lleno.");
+        toast.error("El equipo está lleno.");
         setShowFriendsModal(false);
         return;
       }
@@ -129,14 +130,28 @@ export default function RegisterTeam() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!teamName) return alert("El equipo debe tener un nombre.");
+    if (!teamName) return toast.error("El equipo debe tener un nombre.");
     for (const p of players) {
-      if (!p.name || !p.steam_id_64) return alert(`El jugador ${p.name || "(sin nombre)"} debe tener nombre y URL de Steam.`);
+      if (!p.name || !p.steam_id_64) return toast.error(`El jugador ${p.name || "(sin nombre)"} debe tener nombre y URL de Steam.`);
     }
 
     setIsSubmitting(true);
 
     try {
+      // Re-verify real-time tournament status before proceeding
+      const { data: tData } = await supabase.from("tournaments").select("status").eq("id", id).single();
+      if (tData?.status === "locked") {
+        setIsSubmitting(false);
+        return toast.error("Las inscripciones para este torneo acaban de cerrar.");
+      }
+
+      // Re-verify real-time total registrations limit
+      const { count } = await supabase.from("teams").select("*", { count: "exact", head: true }).eq("tournament_id", id);
+      if (count >= 300) {
+        setIsSubmitting(false);
+        return toast.error("Se ha alcanzado el límite máximo de registros (300) para este torneo.");
+      }
+
       // 1. Upload Logo if exists
       let logoUrl = null;
       if (logoFile) {
@@ -201,12 +216,12 @@ export default function RegisterTeam() {
       const { error: membersError } = await supabase.from("team_members").insert(membersToInsert);
       if (membersError) throw new Error("Error registrando los jugadores.");
 
-      alert("¡Equipo registrado con éxito!");
+      toast.success("¡Equipo registrado con éxito!");
       router.push(`/tournament/${id}`);
 
     } catch (err) {
       console.error(err);
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setIsSubmitting(false);
     }

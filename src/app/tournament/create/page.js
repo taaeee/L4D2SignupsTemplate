@@ -5,6 +5,7 @@ import { Plus, Trash2, Check, Save } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 export default function CreateTournament() {
   const { data: session } = useSession();
@@ -14,6 +15,12 @@ export default function CreateTournament() {
   const [tournamentDescription, setTournamentDescription] = useState("");
   const [maxTeams, setMaxTeams] = useState(8);
   const [isSaving, setIsSaving] = useState(false);
+
+  // New Tournament Options
+  const [logoUrl, setLogoUrl] = useState("");
+  const [rules, setRules] = useState("");
+  const [socialLinks, setSocialLinks] = useState({ twitch: "", twitter: "", youtube: "", discord: "" });
+  const [isPrivate, setIsPrivate] = useState(false);
 
   // Template fields
   const [fields, setFields] = useState([
@@ -43,8 +50,8 @@ export default function CreateTournament() {
   const removePlayerField = (id) => setPlayerFields(playerFields.filter((f) => f.id !== id));
 
   const handleSave = async () => {
-    if (!tournamentName) return alert("Por favor, ponle un nombre al torneo");
-    if (!session?.user?.id) return alert("Debes iniciar sesión para crear un torneo");
+    if (!tournamentName) return toast.error("Por favor, ponle un nombre al torneo");
+    if (!session?.user?.id) return toast.error("Debes iniciar sesión para crear un torneo");
 
     setIsSaving(true);
 
@@ -55,6 +62,10 @@ export default function CreateTournament() {
       playerFormat,
       maxPlayers: Number(maxPlayers) || 8,
       defaultRole,
+      logo_url: logoUrl,
+      rules,
+      social_links: socialLinks,
+      isPrivate,
     };
 
     const { data, error } = await supabase
@@ -75,8 +86,9 @@ export default function CreateTournament() {
 
     if (error) {
       console.error(error);
-      alert("Error al crear el torneo");
+      toast.error("Error al crear el torneo");
     } else if (data) {
+      toast.success("¡Torneo creado exitosamente!");
       router.push(`/tournament/${data.id}`);
     }
   };
@@ -112,6 +124,49 @@ export default function CreateTournament() {
           <div>
             <label className="text-sm text-muted font-medium block mb-2">Descripción (Opcional)</label>
             <textarea className="input-base" value={tournamentDescription} onChange={e => setTournamentDescription(e.target.value)} placeholder="Reglas o descripción corta..." style={{ minHeight: "80px" }} />
+          </div>
+          <div style={{ marginTop: "1.5rem" }}>
+            <label className="text-sm text-muted font-medium block mb-2">URL del Logo (Opcional)</label>
+            <input className="input-base" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://ejemplo.com/logo.png" />
+          </div>
+          <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <input 
+              type="checkbox" 
+              id="private-tournament"
+              checked={isPrivate}
+              onChange={e => setIsPrivate(e.target.checked)}
+              style={{ width: "18px", height: "18px", cursor: "pointer" }}
+            />
+            <label htmlFor="private-tournament" className="text-sm text-main" style={{ cursor: "pointer" }}>
+              Torneo Privado (Oculto en Explorar)
+            </label>
+          </div>
+        </div>
+
+        {/* Social & Rules */}
+        <div className="glass-panel" style={{ padding: "2rem" }}>
+          <h2 style={{ marginBottom: "1.5rem", color: "var(--primary)" }}>Redes y Reglas (Opcional)</h2>
+          <div className="flex gap-4" style={{ flexWrap: "wrap", marginBottom: "1.5rem" }}>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Twitch</label>
+              <input className="input-base" value={socialLinks.twitch} onChange={e => setSocialLinks({...socialLinks, twitch: e.target.value})} placeholder="URL de Twitch" />
+            </div>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Twitter (X)</label>
+              <input className="input-base" value={socialLinks.twitter} onChange={e => setSocialLinks({...socialLinks, twitter: e.target.value})} placeholder="URL de Twitter" />
+            </div>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">YouTube</label>
+              <input className="input-base" value={socialLinks.youtube} onChange={e => setSocialLinks({...socialLinks, youtube: e.target.value})} placeholder="URL de YouTube" />
+            </div>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Discord</label>
+              <input className="input-base" value={socialLinks.discord} onChange={e => setSocialLinks({...socialLinks, discord: e.target.value})} placeholder="URL de Discord" />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-muted font-medium block mb-2">Página de Reglas (Markdown soportado o Texto Libre)</label>
+            <textarea className="input-base" value={rules} onChange={e => setRules(e.target.value)} placeholder="Escribe las reglas completas aquí..." style={{ minHeight: "150px" }} />
           </div>
         </div>
 

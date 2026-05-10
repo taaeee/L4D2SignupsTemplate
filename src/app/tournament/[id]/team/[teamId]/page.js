@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Trash2, Save, Users, Plus, X, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function TeamDetails() {
   const { id: tournamentId, teamId } = useParams();
@@ -21,6 +23,16 @@ export default function TeamDetails() {
   const [friends, setFriends] = useState([]);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [isFriendsLoading, setIsFriendsLoading] = useState(false);
+
+  // Community Bans State
+  const [communityBans, setCommunityBans] = useState([]);
+
+  // Logo Editing State
+  const [isEditingLogo, setIsEditingLogo] = useState(false);
+  const [tempLogoUrl, setTempLogoUrl] = useState("");
+
+  // Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: "", message: "", onConfirm: () => {}, isDanger: true });
 
   useEffect(() => {
     if (tournamentId && teamId && status !== "loading") {
@@ -40,7 +52,7 @@ export default function TeamDetails() {
 
     if (tData && teamData) {
       if (teamData.status !== "accepted") {
-        alert("No puedes acceder al panel de edición de este equipo porque aún no ha sido aceptado.");
+        toast.error("No puedes acceder al panel de edición de este equipo porque aún no ha sido aceptado.");
         router.push(`/tournament/${tournamentId}`);
         return;
       }
@@ -49,7 +61,34 @@ export default function TeamDetails() {
       setTeam({ name: teamData.name, logo_url: teamData.logo_url, creator_id: teamData.creator_id });
       setPlayers(membersData || []);
     }
+
+    // 4. Fetch Community Bans
+    try {
+      if (membersData && membersData.length > 0) {
+        const steamIds = membersData.map(m => m.steam_id_64).filter(Boolean);
+        const bansRes = await fetch("/api/bans/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ steamIds })
+        });
+        if (bansRes.ok) {
+          const bansData = await bansRes.json();
+          setCommunityBans(bansData);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch community bans", e);
+    }
+
     setIsLoading(false);
+  };
+
+  const getPlayerBan = (steamId64) => {
+    if (!steamId64 || !communityBans[steamId64]) return null;
+    if (communityBans[steamId64].isBanned) {
+      return communityBans[steamId64];
+    }
+    return null;
   };
 
   const isCreator = session?.user?.id === tournament?.creator_id;
@@ -60,15 +99,50 @@ export default function TeamDetails() {
   // Mod/Creator always edit. Captain only if open.
   const canEdit = isCreator || isModerator || (isCaptain && !isLocked);
 
+  const checkPermissionToEdit = async () => {
+    const { data: tData } = await supabase.from("tournaments").select("status, creator_id, moderators").eq("id", tournamentId).single();
+    if (!tData) return false;
+
+    const freshIsCreator = session?.user?.id === tData.creator_id;
+    const freshIsModerator = tData.moderators?.includes(session?.user?.id);
+    const freshIsCaptain = session?.user?.id === team?.creator_id;
+    const freshIsLocked = tData.status === "locked";
+    
+    const freshCanEdit = freshIsCreator || freshIsModerator || (freshIsCaptain && !freshIsLocked);
+
+    if (!freshCanEdit) {
+      toast.error(freshIsLocked 
+        ? "El torneo acaba de ser cerrado por un administrador. Ya no puedes hacer cambios."
+        : "No tienes permisos para hacer esto.");
+      
+      if (freshIsLocked && tournament.status !== "locked") {
+        setTournament(prev => ({...prev, status: "locked"}));
+      }
+      return false;
+    }
+    return true;
+  };
+
   // -------------------------
   // PLAYERS MANAGEMENT
   // -------------------------
-  const handleRemovePlayer = async (playerId) => {
-    if (!confirm("¿Estás seguro de eliminar este jugador?")) return;
+  const executeRemovePlayer = async (playerId) => {
+    if (!(await checkPermissionToEdit())) return;
     setIsSaving(true);
     await supabase.from("team_members").delete().eq("id", playerId);
     setPlayers(players.filter(p => p.id !== playerId));
     setIsSaving(false);
+    toast.success("Jugador eliminado.");
+  };
+
+  const handleRemovePlayer = (playerId) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Eliminar Jugador",
+      message: "¿Estás seguro de eliminar este jugador?",
+      isDanger: true,
+      onConfirm: () => executeRemovePlayer(playerId)
+    });
   };
 
   const handleUpdatePlayer = async (index, field, value) => {
@@ -78,18 +152,46 @@ export default function TeamDetails() {
   };
 
   const savePlayerChanges = async (player) => {
+    if (!(await checkPermissionToEdit())) return;
     setIsSaving(true);
     await supabase.from("team_members").update({ name: player.name }).eq("id", player.id);
-    alert("Jugador actualizado.");
+    toast.success("Jugador actualizado.");
     setIsSaving(false);
   };
 
-  const handleDeleteTeam = async () => {
-    if (!confirm("¿Estás seguro de eliminar todo el equipo? Esto es irreversible.")) return;
+  const executeDeleteTeam = async () => {
+    if (!(await checkPermissionToEdit())) return;
     setIsSaving(true);
     await supabase.from("teams").delete().eq("id", teamId);
-    alert("Equipo eliminado.");
+    toast.success("Equipo eliminado.");
     router.push(`/tournament/${tournamentId}`);
+  };
+
+  const handleDeleteTeam = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Eliminar Equipo",
+      message: "¿Estás seguro de eliminar todo el equipo? Esto es irreversible.",
+      isDanger: true,
+      onConfirm: executeDeleteTeam
+    });
+  };
+
+  // -------------------------
+  // UPDATE TEAM LOGO
+  // -------------------------
+  const handleSaveLogo = async () => {
+    if (!(await checkPermissionToEdit())) return;
+    setIsSaving(true);
+    const { error } = await supabase.from("teams").update({ logo_url: tempLogoUrl }).eq("id", teamId);
+    if (!error) {
+      setTeam({ ...team, logo_url: tempLogoUrl });
+      toast.success("Logo actualizado con éxito.");
+      setIsEditingLogo(false);
+    } else {
+      toast.error("Error al actualizar el logo.");
+    }
+    setIsSaving(false);
   };
 
   // -------------------------
@@ -105,6 +207,7 @@ export default function TeamDetails() {
         const res = await fetch("/api/steam/friends");
         const data = await res.json();
         if (!data.error) setFriends(data.friends || []);
+        else toast.error(data.error);
       } catch (err) {
         console.error(err);
       } finally {
@@ -115,8 +218,11 @@ export default function TeamDetails() {
 
   const selectFriend = async (friend) => {
     setShowFriendsModal(false);
+    
+    if (!(await checkPermissionToEdit())) return;
+
     if (players.length >= (tournament.template_json.maxPlayers || 8)) {
-      return alert("El equipo está lleno.");
+      return toast.error("El equipo está lleno.");
     }
     
     setIsSaving(true);
@@ -138,9 +244,9 @@ export default function TeamDetails() {
       if (error) throw new Error("Error guardando el jugador.");
 
       setPlayers([...players, data]);
-      alert("Amigo añadido con éxito.");
+      toast.success("Amigo añadido con éxito.");
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setIsSaving(false);
     }
@@ -148,11 +254,13 @@ export default function TeamDetails() {
 
   const handleAddNewPlayer = async () => {
     if (!newPlayer.name || !newPlayer.steam_id_64) {
-      return alert("El nombre y el SteamID64 son obligatorios.");
+      return toast.error("El nombre y el SteamID64 son obligatorios.");
     }
 
+    if (!(await checkPermissionToEdit())) return;
+
     if (players.length >= (tournament.template_json.maxPlayers || 8)) {
-      return alert("El equipo está lleno.");
+      return toast.error("El equipo está lleno.");
     }
 
     setIsSaving(true);
@@ -175,9 +283,9 @@ export default function TeamDetails() {
 
       setPlayers([...players, data]);
       setNewPlayer({ name: "", steam_id_64: "" });
-      alert("Jugador añadido con éxito.");
+      toast.success("Jugador añadido con éxito.");
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setIsSaving(false);
     }
@@ -188,19 +296,40 @@ export default function TeamDetails() {
 
   return (
     <div className="container" style={{ paddingBottom: "4rem" }}>
-      <header style={{ marginBottom: "2rem", display: "flex", alignItems: "center", gap: "2rem" }}>
-        <img 
-          src={team.logo_url || "https://ui-avatars.com/api/?name=" + team.name} 
-          alt={team.name} 
-          style={{ width: "100px", height: "100px", borderRadius: "16px", objectFit: "cover" }} 
-        />
-        <div>
+      <header style={{ marginBottom: "2rem", display: "flex", alignItems: "center", gap: "2rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <img 
+            src={team.logo_url || "https://ui-avatars.com/api/?name=" + team.name} 
+            alt={team.name} 
+            style={{ width: "100px", height: "100px", borderRadius: "16px", objectFit: "cover" }} 
+          />
+          {canEdit && !isEditingLogo && (
+            <button className="btn btn-secondary text-sm" style={{ padding: "0.3rem" }} onClick={() => { setIsEditingLogo(true); setTempLogoUrl(team.logo_url || ""); }}>
+              Editar Logo
+            </button>
+          )}
+        </div>
+        
+        {isEditingLogo && canEdit && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", flex: 1, minWidth: "250px" }}>
+            <label className="text-sm text-muted">URL del nuevo logo</label>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <input className="input-base" style={{ flex: 1 }} value={tempLogoUrl} onChange={e => setTempLogoUrl(e.target.value)} placeholder="https://ejemplo.com/logo.png" />
+              <button className="btn btn-primary" onClick={handleSaveLogo} disabled={isSaving}><Save size={18} /></button>
+              <button className="btn-icon text-muted" onClick={() => setIsEditingLogo(false)}><X size={18} /></button>
+            </div>
+          </div>
+        )}
+
+        {!isEditingLogo && (
+          <div>
           <h1 style={{ margin: 0, fontSize: "2.5rem" }}>{team.name}</h1>
           <p className="text-muted">Torneo: {tournament.name}</p>
           {!canEdit && isCaptain && isLocked && (
              <p className="text-danger">El torneo ha iniciado. No puedes editar tu equipo.</p>
           )}
         </div>
+        )}
       </header>
 
       <div className="glass-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
@@ -211,7 +340,7 @@ export default function TeamDetails() {
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {players.map((p, index) => (
             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "1rem", background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
+              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1.5fr 1.5fr", gap: "1rem" }}>
                 <div>
                   <label className="text-sm text-muted block mb-1">Nombre</label>
                   <input className="input-base" value={p.name} disabled={!canEdit} onChange={e => handleUpdatePlayer(index, "name", e.target.value)} />
@@ -230,6 +359,29 @@ export default function TeamDetails() {
                       <ExternalLink size={16} />
                     </a>
                   </div>
+                </div>
+                <div>
+                  <label className="text-sm text-muted block mb-1">Estado (Comunidad)</label>
+                  {(() => {
+                    const banInfo = getPlayerBan(p.steam_id_64);
+                    if (banInfo && banInfo.isBanned) {
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", background: "rgba(239, 68, 68, 0.1)", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
+                          <span className="text-danger text-sm" style={{ fontWeight: "bold" }}>BANEADO</span>
+                          {banInfo.bans && banInfo.bans.map((b, i) => (
+                            <a key={i} href={b.url} target="_blank" rel="noreferrer" className="text-xs text-danger" style={{ display: "block", marginTop: "4px", textDecoration: "none", fontWeight: "bold" }}>
+                              [{b.source}] Ver Ban ↗
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", background: "rgba(34, 197, 94, 0.1)", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid rgba(34, 197, 94, 0.3)", height: "42px" }}>
+                        <span className="text-success text-sm" style={{ fontWeight: "bold" }}>Legit</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               {canEdit && (
@@ -320,6 +472,16 @@ export default function TeamDetails() {
           </div>
         </div>
       )}
+      
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText="Sí, Eliminar"
+        isDanger={confirmModal.isDanger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
     </div>
   );
 }

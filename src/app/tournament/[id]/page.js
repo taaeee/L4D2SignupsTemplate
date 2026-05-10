@@ -4,7 +4,10 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Users, Trophy, Download, Settings, Edit } from "lucide-react";
+import { Users, Trophy, Download, Settings, Edit, Video, MessageCircle, PlayCircle, MessageSquare, FileText, X } from "lucide-react";
+import { toast } from "sonner";
+import ConfirmModal from "@/components/ConfirmModal";
+import ReactMarkdown from "react-markdown";
 
 export default function TournamentDetails() {
   const { id } = useParams();
@@ -16,6 +19,10 @@ export default function TournamentDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedTeams, setExpandedTeams] = useState({});
   const [teamsSearch, setTeamsSearch] = useState("");
+  
+  const [teamToDelete, setTeamToDelete] = useState(null);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [communityBans, setCommunityBans] = useState([]);
 
   useEffect(() => {
     if (id) {
@@ -48,11 +55,49 @@ export default function TournamentDetails() {
     if (!teamsError && teamsData) {
       setTeams(teamsData);
     }
+
+    try {
+      if (teamsData && teamsData.length > 0) {
+        // Collect all steamIds from all teams
+        const allSteamIds = [];
+        teamsData.forEach(team => {
+          if (team.team_members) {
+            team.team_members.forEach(m => {
+              if (m.steam_id_64) allSteamIds.push(m.steam_id_64);
+            });
+          }
+        });
+        
+        if (allSteamIds.length > 0) {
+          const bansRes = await fetch("/api/bans/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ steamIds: allSteamIds })
+          });
+          if (bansRes.ok) {
+            const bansData = await bansRes.json();
+            setCommunityBans(bansData);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch community bans", e);
+    }
+
     setIsLoading(false);
+  };
+
+  const getPlayerBan = (steamId64) => {
+    if (!steamId64 || !communityBans[steamId64]) return null;
+    return communityBans[steamId64];
   };
 
   const handleExport = () => {
     window.location.href = `/api/tournament/${id}/export`;
+  };
+
+  const handleExportLogos = () => {
+    window.location.href = `/api/tournament/${id}/export-logos`;
   };
 
   if (isLoading) {
@@ -77,7 +122,7 @@ export default function TournamentDetails() {
 
   const handleAcceptTeam = async (teamId) => {
     if (acceptedTeamsAll.length >= tournament.max_teams) {
-      return alert("No puedes aceptar más equipos. Se ha alcanzado el límite de equipos del torneo.");
+      return toast.error("No puedes aceptar más equipos. Se ha alcanzado el límite de equipos del torneo.");
     }
     const { error } = await supabase.from("teams").update({ status: "accepted" }).eq("id", teamId);
     if (!error) {
@@ -85,12 +130,20 @@ export default function TournamentDetails() {
     }
   };
 
-  const handleRejectOrDelete = async (teamId) => {
-    if (!confirm("¿Seguro que deseas eliminar este equipo? Esta acción no se puede deshacer y liberará un cupo.")) return;
-    const { error } = await supabase.from("teams").delete().eq("id", teamId);
+  const executeDeleteTeam = async () => {
+    if (!teamToDelete) return;
+    const { error } = await supabase.from("teams").delete().eq("id", teamToDelete);
     if (!error) {
-      setTeams(teams.filter(t => t.id !== teamId));
+      setTeams(teams.filter(t => t.id !== teamToDelete));
+      toast.success("Equipo eliminado correctamente.");
+    } else {
+      toast.error("Error al eliminar el equipo.");
     }
+    setTeamToDelete(null);
+  };
+
+  const handleRejectOrDelete = (teamId) => {
+    setTeamToDelete(teamId);
   };
 
 
@@ -161,11 +214,14 @@ export default function TournamentDetails() {
                 <th style={{ padding: "0.5rem 1rem", borderRight: "1px solid var(--border-light)" }}>Player</th>
                 <th style={{ padding: "0.5rem 1rem", borderRight: "1px solid var(--border-light)" }}>Steam ID</th>
                 <th style={{ padding: "0.5rem 1rem", borderRight: "1px solid var(--border-light)", textAlign: "center" }}>Horas</th>
-                <th style={{ padding: "0.5rem 1rem", textAlign: "center" }}>¿Perfil Público?</th>
+                <th style={{ padding: "0.5rem 1rem", borderRight: "1px solid var(--border-light)", textAlign: "center" }}>¿Perfil Público?</th>
+                <th style={{ padding: "0.5rem 1rem", textAlign: "center" }}>Ban Comunitario</th>
               </tr>
             </thead>
             <tbody>
-              {players.map((p, idx) => (
+              {players.map((p, idx) => {
+                const banInfo = getPlayerBan(p.steam_id_64);
+                return (
                 <tr key={p.id} style={{ background: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
                   <td style={{ padding: "0.5rem 1rem", borderRight: "1px solid var(--border-light)" }}>
                     <div style={{ maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.name}>
@@ -180,9 +236,30 @@ export default function TournamentDetails() {
                     </div>
                   </td>
                   <td style={{ padding: "0.5rem 1rem", borderRight: "1px solid var(--border-light)", textAlign: "center" }}>{p.l4d2_playtime_hours !== null ? p.l4d2_playtime_hours : "-"}</td>
-                  <td style={{ padding: "0.5rem 1rem", textAlign: "center" }}>{p.is_profile_private ? <span className="text-danger">No</span> : <span className="text-success">Sí</span>}</td>
+                  <td style={{ padding: "0.5rem 1rem", borderRight: "1px solid var(--border-light)", textAlign: "center" }}>{p.is_profile_private ? <span className="text-danger">No</span> : <span className="text-success">Sí</span>}</td>
+                  <td style={{ padding: "0.5rem 1rem", textAlign: "center" }}>
+                    {(() => {
+                      const banInfo = getPlayerBan(p.steam_id_64);
+                      if (!banInfo) return <span className="text-muted" style={{ fontSize: "0.8rem" }}>-</span>;
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "center" }}>
+                          {banInfo.bans?.length > 0 ? (
+                            banInfo.bans.map((b, i) => (
+                              <a key={`ban-${i}`} href={b.url} target="_blank" rel="noreferrer" className="badge" style={{ background: "rgba(239, 68, 68, 0.1)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.3)", textDecoration: "none", width: "100%", padding: "2px 5px", fontSize: "0.7rem", display: "inline-block" }} title={`Ver baneo en ${b.source}`}>
+                                {b.source} (Ban)
+                              </a>
+                            ))
+                          ) : (
+                            <span className="badge" style={{ background: "rgba(34, 197, 94, 0.1)", color: "var(--success)", border: "1px solid rgba(34, 197, 94, 0.3)", padding: "2px 8px", fontSize: "0.75rem", display: "inline-block", fontWeight: "bold" }}>
+                              Legit
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
           <div style={{ marginTop: "auto", borderTop: "1px solid var(--border-light)", padding: "0.75rem 1rem", textAlign: "right", fontWeight: "bold", background: "rgba(0,0,0,0.2)" }}>
@@ -246,47 +323,76 @@ export default function TournamentDetails() {
 
   return (
     <div className="container" style={{ paddingBottom: "4rem", maxWidth: "1400px" }}>
-      <header style={{ marginBottom: "3rem", textAlign: "center" }}>
-        <h1 style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>{tournament.name}</h1>
+      <header style={{ marginBottom: "3rem", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        {tournament.template_json?.logo_url && (
+          <img 
+            src={tournament.template_json.logo_url} 
+            alt={tournament.name} 
+            style={{ width: "120px", height: "120px", borderRadius: "20px", objectFit: "cover", marginBottom: "0.5rem", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }} 
+          />
+        )}
+        <h1 style={{ fontSize: "2.5rem", margin: 0 }}>{tournament.name}</h1>
         <p className="text-muted" style={{ maxWidth: "600px", margin: "0 auto" }}>
           {tournament.description}
         </p>
+
+        {/* Social Links & Rules */}
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center", marginTop: "1rem" }}>
+          {tournament.template_json?.social_links?.twitch && (
+            <a href={tournament.template_json.social_links.twitch} target="_blank" rel="noreferrer" className="btn-icon" style={{ background: "rgba(145, 70, 255, 0.2)", color: "#9146FF" }} title="Twitch">
+              <Video size={20} />
+            </a>
+          )}
+          {tournament.template_json?.social_links?.twitter && (
+            <a href={tournament.template_json.social_links.twitter} target="_blank" rel="noreferrer" className="btn-icon" style={{ background: "rgba(29, 161, 242, 0.2)", color: "#1DA1F2" }} title="Twitter">
+              <MessageCircle size={20} />
+            </a>
+          )}
+          {tournament.template_json?.social_links?.youtube && (
+            <a href={tournament.template_json.social_links.youtube} target="_blank" rel="noreferrer" className="btn-icon" style={{ background: "rgba(255, 0, 0, 0.2)", color: "#FF0000" }} title="YouTube">
+              <PlayCircle size={20} />
+            </a>
+          )}
+          {tournament.template_json?.social_links?.discord && (
+            <a href={tournament.template_json.social_links.discord} target="_blank" rel="noreferrer" className="btn-icon" style={{ background: "rgba(88, 101, 242, 0.2)", color: "#5865F2" }} title="Discord">
+              <MessageSquare size={20} />
+            </a>
+          )}
+          {tournament.template_json?.rules && (
+            <button className="btn btn-secondary text-sm" onClick={() => setShowRulesModal(true)} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <FileText size={18} /> Ver Reglas
+            </button>
+          )}
+        </div>
       </header>
 
       <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap", justifyContent: "center", marginBottom: "3rem" }}>
-        <div className="card" style={{ flex: "1 1 200px", textAlign: "center", position: "relative" }}>
-          {canManage && (
-            <button 
-              className="btn-icon" 
-              style={{ position: "absolute", top: "1rem", right: "1rem" }}
-              onClick={() => router.push(`/tournament/${id}/edit`)}
-              title="Configuración"
-            >
-              <Settings size={20} />
-            </button>
-          )}
+        <div style={{ flex: "1 1 200px", textAlign: "center", position: "relative" }}>
           <Trophy size={32} style={{ color: "var(--primary)", margin: "0 auto 1rem" }} />
           <h3>Estado</h3>
           <p className={isLocked ? "text-danger" : (isFull ? "text-warning" : "text-success")}>
             {isLocked ? "Torneo Cerrado" : (isRegistrationFull ? "Registro Lleno (300)" : "Registro Abierto")}
           </p>
         </div>
-        <div className="card" style={{ flex: "1 1 200px", textAlign: "center" }}>
+        <div style={{ flex: "1 1 200px", textAlign: "center" }}>
           <Users size={32} style={{ color: "var(--primary)", margin: "0 auto 1rem" }} />
           <h3>Equipos Aceptados</h3>
           <p style={{ fontSize: "1.5rem", fontWeight: "bold" }}>{acceptedTeamsAll.length} / {tournament.max_teams}</p>
         </div>
-        <div className="card" style={{ flex: "1 1 200px", textAlign: "center" }}>
+        <div style={{ flex: "1 1 200px", textAlign: "center" }}>
           <Users size={32} style={{ color: "var(--muted)", margin: "0 auto 1rem" }} />
           <h3>En Cola (Pendientes)</h3>
           <p style={{ fontSize: "1.5rem", fontWeight: "bold" }}>{pendingTeams.length}</p>
         </div>
         {isCreator && (
-          <div className="card" style={{ flex: "1 1 200px", textAlign: "center" }}>
+          <div style={{ flex: "1 1 200px", textAlign: "center" }}>
             <Download size={32} style={{ color: "var(--primary)", margin: "0 auto 1rem" }} />
             <h3>Exportar Datos</h3>
             <button className="btn btn-secondary" onClick={handleExport} style={{ marginTop: "0.5rem" }}>
               Descargar Excel
+            </button>
+            <button className="btn btn-secondary" onClick={handleExportLogos} style={{ marginTop: "0.5rem", marginLeft: "0.5rem" }}>
+              Logos (ZIP)
             </button>
           </div>
         )}
@@ -337,6 +443,40 @@ export default function TournamentDetails() {
           </div>
         )}
       </main>
+
+      <ConfirmModal 
+        isOpen={!!teamToDelete}
+        title="Eliminar Equipo"
+        message="¿Seguro que deseas eliminar este equipo? Esta acción no se puede deshacer y liberará un cupo."
+        confirmText="Sí, Eliminar"
+        isDanger={true}
+        onConfirm={executeDeleteTeam}
+        onCancel={() => setTeamToDelete(null)}
+      />
+
+      {/* Rules Modal */}
+      {showRulesModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+          backgroundColor: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000
+        }}>
+          <div className="card" style={{ width: "90%", maxWidth: "800px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
+              <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}><FileText size={24} color="var(--primary)"/> Reglas del Torneo</h2>
+              <button className="btn-icon" onClick={() => setShowRulesModal(false)}><X size={24} /></button>
+            </div>
+            <div style={{ overflowY: "auto", flex: 1, padding: "1rem", whiteSpace: "normal", lineHeight: "1.6", color: "var(--muted)", fontSize: "1.05rem" }}>
+              {tournament.template_json?.rules ? (
+                <div className="markdown-container">
+                  <ReactMarkdown>{tournament.template_json.rules}</ReactMarkdown>
+                </div>
+              ) : (
+                "No hay reglas definidas para este torneo."
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -89,6 +89,23 @@ button {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
+/* Cards */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  transition: all var(--transition);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.card:hover {
+  background: var(--bg-surface-elevated);
+  border-color: rgba(74, 222, 128, 0.3); /* Subtle primary tint */
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+}
+
 /* Inputs */
 .input-base {
   width: 100%;
@@ -250,4 +267,44 @@ button {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-disabled);
+}
+
+/* Markdown Styles */
+.markdown-container h1, .markdown-container h2, .markdown-container h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-main);
+}
+.markdown-container h1:first-child, .markdown-container h2:first-child {
+  margin-top: 0;
+}
+.markdown-container p {
+  margin-bottom: 1rem;
+}
+.markdown-container ul, .markdown-container ol {
+  margin-bottom: 1rem;
+  padding-left: 2rem;
+}
+.markdown-container li {
+  margin-bottom: 0.5rem;
+}
+.markdown-container a {
+  text-decoration: underline;
+}
+.markdown-container code {
+  background: rgba(0,0,0,0.3);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: monospace;
+}
+.markdown-container pre {
+  background: rgba(0,0,0,0.3);
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+.markdown-container pre code {
+  background: transparent;
+  padding: 0;
 }
