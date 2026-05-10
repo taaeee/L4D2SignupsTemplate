@@ -3,15 +3,24 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Plus, Trash2, Upload, Users, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 export default function RegisterTeam() {
   const { id } = useParams();
   const router = useRouter();
+  const { data: session, status } = useSession();
 
   const [tournament, setTournament] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Steam Friends State
+  const [friends, setFriends] = useState([]);
+  const [friendsSearch, setFriendsSearch] = useState("");
+  const [isFriendsLoading, setIsFriendsLoading] = useState(false);
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [activePlayerIndex, setActivePlayerIndex] = useState(null);
 
   // Form State
   const [teamName, setTeamName] = useState("");
@@ -20,23 +29,88 @@ export default function RegisterTeam() {
   const [players, setPlayers] = useState([]);
 
   useEffect(() => {
-    if (id) fetchData();
-  }, [id]);
+    if (status === "unauthenticated") {
+      alert("Debes iniciar sesión para registrar un equipo.");
+      router.push("/");
+    } else if (status === "authenticated" && id) {
+      fetchData();
+    }
+  }, [id, status, router]);
 
   const fetchData = async () => {
     const { data, error } = await supabase.from("tournaments").select("*").eq("id", id).single();
     if (data) {
       setTournament(data);
-      // Initialize with 1 player by default
+      if (data.status === "locked") {
+        alert("Las inscripciones para este torneo están cerradas.");
+        router.push(`/tournament/${id}`);
+        return;
+      }
+
+      // Check max 300 total registrations
+      const { count } = await supabase
+        .from("teams")
+        .select("*", { count: "exact", head: true })
+        .eq("tournament_id", id);
+        
+      if (count >= 300) {
+        alert("Se ha alcanzado el límite máximo de registros (300) para este torneo.");
+        router.push(`/tournament/${id}`);
+        return;
+      }
+
       setPlayers([{ 
         id: Date.now(), 
-        name: "", 
+        name: session?.user?.name || "", 
         steam_id_64: "", 
-        role: data.template_json.defaultRole || "Member",
         answers: {} 
       }]);
     }
     setIsLoading(false);
+  };
+
+  const loadFriends = async (index) => {
+    setActivePlayerIndex(index);
+    setFriendsSearch(""); // Reset search on open
+    setShowFriendsModal(true);
+    if (friends.length === 0) {
+      setIsFriendsLoading(true);
+      try {
+        const res = await fetch("/api/steam/friends");
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+        } else {
+          setFriends(data.friends || []);
+        }
+      } catch (err) {
+        console.error("Error loading friends:", err);
+      } finally {
+        setIsFriendsLoading(false);
+      }
+    }
+  };
+
+  const selectFriend = (friend) => {
+    if (activePlayerIndex === -1) {
+      if (players.length >= (tournament?.template_json?.maxPlayers || 8)) {
+        alert("El equipo está lleno.");
+        setShowFriendsModal(false);
+        return;
+      }
+      setPlayers([...players, {
+        id: Date.now(),
+        name: friend.name,
+        steam_id_64: friend.profileUrl,
+        answers: {}
+      }]);
+    } else {
+      const newP = [...players];
+      newP[activePlayerIndex].name = friend.name;
+      newP[activePlayerIndex].steam_id_64 = friend.profileUrl;
+      setPlayers(newP);
+    }
+    setShowFriendsModal(false);
   };
 
   const handleAddPlayer = () => {
@@ -45,7 +119,6 @@ export default function RegisterTeam() {
       id: Date.now(), 
       name: "", 
       steam_id_64: "", 
-      role: tournament.template_json.defaultRole || "Member",
       answers: {} 
     }]);
   };
@@ -58,7 +131,7 @@ export default function RegisterTeam() {
     e.preventDefault();
     if (!teamName) return alert("El equipo debe tener un nombre.");
     for (const p of players) {
-      if (!p.name || !p.steam_id_64) return alert(`El jugador ${p.name || "(sin nombre)"} debe tener nombre y SteamID64.`);
+      if (!p.name || !p.steam_id_64) return alert(`El jugador ${p.name || "(sin nombre)"} debe tener nombre y URL de Steam.`);
     }
 
     setIsSubmitting(true);
@@ -82,15 +155,16 @@ export default function RegisterTeam() {
       // 2. Validate and fetch Steam Data for players
       const validatedPlayers = [];
       for (const p of players) {
-        const res = await fetch(`/api/steam/player-stats?steamId=${p.steam_id_64}`);
+        const res = await fetch(`/api/steam/player-stats?steamUrl=${encodeURIComponent(p.steam_id_64)}`);
         const steamData = await res.json();
         
         if (!res.ok || steamData.error) {
-          throw new Error(`El SteamID64 de ${p.name} es inválido o no existe.`);
+          throw new Error(`La URL de Steam de ${p.name} es inválida o no existe.`);
         }
         
         validatedPlayers.push({
           ...p,
+          steam_id_64: steamData.steam_id_64,
           l4d2_playtime_hours: steamData.l4d2_playtime_hours,
           is_profile_private: steamData.is_profile_private
         });
@@ -103,18 +177,23 @@ export default function RegisterTeam() {
 
       const { data: teamData, error: teamError } = await supabase
         .from("teams")
-        .insert([{ tournament_id: id, name: teamName, logo_url: logoUrl }])
+        .insert([{ 
+          tournament_id: id, 
+          name: teamName, 
+          logo_url: logoUrl,
+          creator_id: session.user.id 
+        }])
         .select()
         .single();
 
       if (teamError) throw new Error("Error creando el equipo.");
 
       // 4. Insert Players
-      const membersToInsert = validatedPlayers.map(vp => ({
+      const membersToInsert = validatedPlayers.map((vp, idx) => ({
         team_id: teamData.id,
         name: vp.name,
-        role: vp.role,
-        steam_id_64: vp.steam_id_64,
+        role: idx === 0 ? "Captain" : idx === 1 ? "Co-Captain" : "Member",
+        steam_id_64: vp.steam_id_64, // the API now returns the resolved steam_id_64
         l4d2_playtime_hours: vp.l4d2_playtime_hours,
         is_profile_private: vp.is_profile_private,
       }));
@@ -133,7 +212,7 @@ export default function RegisterTeam() {
     }
   };
 
-  if (isLoading) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Cargando...</div>;
+  if (status === "loading" || isLoading) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Cargando...</div>;
   if (!tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Torneo no encontrado.</div>;
 
   const tpl = tournament.template_json;
@@ -186,9 +265,14 @@ export default function RegisterTeam() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
             <h2 style={{ color: "var(--primary)", margin: 0 }}>Jugadores ({players.length} / {tpl.maxPlayers || 8})</h2>
             {players.length < (tpl.maxPlayers || 8) && (
-              <button type="button" className="btn btn-secondary" onClick={handleAddPlayer}>
-                <Plus size={18} /> Añadir Jugador
-              </button>
+              <div style={{ display: "flex", gap: "1rem" }}>
+                <button type="button" className="btn btn-secondary" onClick={() => loadFriends(-1)} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <Users size={18} /> Añadir desde Steam
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={handleAddPlayer}>
+                  <Plus size={18} /> Añadir Jugador
+                </button>
+              </div>
             )}
           </div>
 
@@ -200,7 +284,14 @@ export default function RegisterTeam() {
                     <Trash2 size={18} />
                   </button>
                 )}
-                <h3 style={{ marginBottom: "1rem", fontSize: "1.1rem" }}>Jugador {index + 1}</h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <h3 style={{ fontSize: "1.1rem", margin: 0 }}>
+                    Jugador {index + 1} 
+                    <span className="text-muted text-sm ml-2">
+                      ({index === 0 ? "Captain" : index === 1 ? "Co-Captain" : "Member"})
+                    </span>
+                  </h3>
+                </div>
                 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
                   <div>
@@ -212,18 +303,10 @@ export default function RegisterTeam() {
                     }} />
                   </div>
                   <div>
-                    <label className="text-sm text-muted block mb-1">SteamID64 *</label>
-                    <input required className="input-base" placeholder="7656119..." value={player.steam_id_64} onChange={e => {
+                    <label className="text-sm text-muted block mb-1">URL de Steam *</label>
+                    <input required className="input-base" placeholder="https://steamcommunity.com/id/..." value={player.steam_id_64} onChange={e => {
                       const newP = [...players];
                       newP[index].steam_id_64 = e.target.value;
-                      setPlayers(newP);
-                    }} />
-                  </div>
-                  <div>
-                    <label className="text-sm text-muted block mb-1">Rol</label>
-                    <input className="input-base" value={player.role} onChange={e => {
-                      const newP = [...players];
-                      newP[index].role = e.target.value;
                       setPlayers(newP);
                     }} />
                   </div>
@@ -248,6 +331,64 @@ export default function RegisterTeam() {
           {isSubmitting ? "Registrando y Validando..." : "Finalizar Registro"}
         </button>
       </form>
+
+      {/* Friends Modal */}
+      {showFriendsModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+          backgroundColor: "rgba(0,0,0,0.7)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000
+        }}>
+          <div className="card" style={{ width: "90%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h3 style={{ margin: 0 }}>Mis Amigos de Steam</h3>
+              <button className="btn-icon" onClick={() => setShowFriendsModal(false)}><X size={20} /></button>
+            </div>
+            
+            <input 
+              type="text" 
+              className="input-base" 
+              placeholder="Buscar amigo por nombre..." 
+              value={friendsSearch}
+              onChange={(e) => setFriendsSearch(e.target.value)}
+              style={{ marginBottom: "1rem" }}
+            />
+            
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {isFriendsLoading ? (
+                <p style={{ textAlign: "center", padding: "2rem" }}>Cargando amigos...</p>
+              ) : friends.length === 0 ? (
+                <p style={{ textAlign: "center", padding: "2rem", color: "var(--color-error)" }}>
+                  No se encontraron amigos. Asegúrate de haber iniciado sesión con Steam y tener tu perfil público.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {friends.filter(f => f.name.toLowerCase().includes(friendsSearch.toLowerCase())).map(friend => (
+                    <div key={friend.steamId} 
+                         onClick={() => selectFriend(friend)}
+                         style={{ 
+                           display: "flex", alignItems: "center", gap: "1rem", padding: "0.5rem", 
+                           borderRadius: "8px", cursor: "pointer", background: "rgba(255,255,255,0.05)" 
+                         }}
+                         onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                         onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                    >
+                      <img src={friend.avatar} alt={friend.name} style={{ width: 40, height: 40, borderRadius: "50%" }} />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontWeight: "bold" }}>{friend.name}</p>
+                        <p className="text-muted text-sm" style={{ margin: 0 }}>{friend.steamId}</p>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {friends.filter(f => f.name.toLowerCase().includes(friendsSearch.toLowerCase())).length === 0 && (
+                    <p style={{ textAlign: "center", padding: "1rem", color: "var(--muted)" }}>No hay coincidencias.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

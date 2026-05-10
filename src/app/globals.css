@@ -62,6 +62,16 @@ a:hover {
   color: var(--primary-hover);
 }
 
+.player-link {
+  color: var(--text-main);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.player-link:hover {
+  color: var(--primary);
+}
+
 button {
   cursor: pointer;
   font-family: inherit;

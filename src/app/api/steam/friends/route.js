@@ -1,21 +1,38 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { getServerSession } from "next-auth/next";
+import { getAuthOptions } from "@/app/api/auth/[...nextauth]/route";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
-export async function GET() {
+export async function GET(request) {
   try {
-    const session = await getSession();
-    if (!session?.steamId) {
+    const session = await getServerSession(getAuthOptions(request));
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Buscamos la cuenta vinculada de Steam en la base de datos
+    const { data: account, error } = await supabaseAdmin
+      .schema("next_auth")
+      .from("accounts")
+      .select("providerAccountId")
+      .eq("userId", session.user.id)
+      .eq("provider", "steam")
+      .single();
+
+    if (error || !account) {
+      return NextResponse.json({ error: "No tienes una cuenta de Steam vinculada." }, { status: 400 });
+    }
+
+    const steamId = account.providerAccountId;
     const API_KEY = process.env.STEAM_API_KEY;
+
     if (!API_KEY) {
       return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
     }
 
     // 1. Fetch friend list
     const friendListRes = await fetch(
-      `https://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key=${API_KEY}&steamid=${session.steamId}&relationship=friend`
+      `https://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key=${API_KEY}&steamid=${steamId}&relationship=friend`
     );
     
     if (!friendListRes.ok) {
@@ -32,7 +49,6 @@ export async function GET() {
     // Steam API allows up to 100 steamids per request for GetPlayerSummaries
     const friendIds = friends.map(f => f.steamid);
     
-    // Split into chunks of 100
     const chunks = [];
     for (let i = 0; i < friendIds.length; i += 100) {
       chunks.push(friendIds.slice(i, i + 100));
@@ -52,7 +68,6 @@ export async function GET() {
       }
     }
 
-    // Format output
     const formattedFriends = allProfiles.map(p => ({
       steamId: p.steamid,
       name: p.personaname,
@@ -60,7 +75,6 @@ export async function GET() {
       profileUrl: p.profileurl
     }));
 
-    // Sort alphabetically by name
     formattedFriends.sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json({ friends: formattedFriends });

@@ -17,7 +17,7 @@ export default function CreateTournament() {
 
   // Template fields
   const [fields, setFields] = useState([
-    { id: Date.now(), name: "Team", type: "text", options: "" },
+    { id: Date.now(), name: "Tag", type: "text", options: "" },
     { id: Date.now() + 1, name: "Region", type: "text", options: "" },
   ]);
   const [playerFields, setPlayerFields] = useState([
@@ -103,6 +103,10 @@ export default function CreateTournament() {
             <div style={{ flex: "1 1 150px" }}>
               <label className="text-sm text-muted font-medium block mb-2">Límite de Equipos</label>
               <input type="number" className="input-base" value={maxTeams} onChange={e => setMaxTeams(e.target.value)} min="2" />
+            </div>
+            <div style={{ flex: "1 1 150px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Jugadores por Equipo</label>
+              <input type="number" className="input-base" value={maxPlayers} onChange={e => setMaxPlayers(e.target.value)} min="4" />
             </div>
           </div>
           <div>
