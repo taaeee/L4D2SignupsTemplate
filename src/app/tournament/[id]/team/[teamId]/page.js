@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Trash2, Save, Users, Plus, X, ExternalLink } from "lucide-react";
+import { Trash2, Save, Users, Plus, X, ExternalLink, Upload } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
 
@@ -29,7 +29,7 @@ export default function TeamDetails() {
 
   // Logo Editing State
   const [isEditingLogo, setIsEditingLogo] = useState(false);
-  const [tempLogoUrl, setTempLogoUrl] = useState("");
+  const [tempLogoFile, setTempLogoFile] = useState(null);
 
   // Confirm Modal State
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: "", message: "", onConfirm: () => {}, isDanger: true });
@@ -182,16 +182,32 @@ export default function TeamDetails() {
   // -------------------------
   const handleSaveLogo = async () => {
     if (!(await checkPermissionToEdit())) return;
+    if (!tempLogoFile) return toast.error("Selecciona una imagen primero.");
+    
     setIsSaving(true);
-    const { error } = await supabase.from("teams").update({ logo_url: tempLogoUrl }).eq("id", teamId);
-    if (!error) {
-      setTeam({ ...team, logo_url: tempLogoUrl });
+    try {
+      const fileExt = tempLogoFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("team-logos")
+        .upload(fileName, tempLogoFile);
+
+      if (uploadError) throw new Error("Error subiendo el logo: " + uploadError.message);
+      
+      const { data: { publicUrl } } = supabase.storage.from("team-logos").getPublicUrl(fileName);
+
+      const { error } = await supabase.from("teams").update({ logo_url: publicUrl }).eq("id", teamId);
+      if (error) throw new Error("Error actualizando la base de datos.");
+
+      setTeam({ ...team, logo_url: publicUrl });
       toast.success("Logo actualizado con éxito.");
       setIsEditingLogo(false);
-    } else {
-      toast.error("Error al actualizar el logo.");
+      setTempLogoFile(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   // -------------------------
@@ -304,7 +320,7 @@ export default function TeamDetails() {
             style={{ width: "100px", height: "100px", borderRadius: "16px", objectFit: "cover" }} 
           />
           {canEdit && !isEditingLogo && (
-            <button className="btn btn-secondary text-sm" style={{ padding: "0.3rem" }} onClick={() => { setIsEditingLogo(true); setTempLogoUrl(team.logo_url || ""); }}>
+            <button className="btn btn-secondary text-sm" style={{ padding: "0.3rem" }} onClick={() => { setIsEditingLogo(true); setTempLogoFile(null); }}>
               Editar Logo
             </button>
           )}
@@ -312,10 +328,14 @@ export default function TeamDetails() {
         
         {isEditingLogo && canEdit && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", flex: 1, minWidth: "250px" }}>
-            <label className="text-sm text-muted">URL del nuevo logo</label>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <input className="input-base" style={{ flex: 1 }} value={tempLogoUrl} onChange={e => setTempLogoUrl(e.target.value)} placeholder="https://ejemplo.com/logo.png" />
-              <button className="btn btn-primary" onClick={handleSaveLogo} disabled={isSaving}><Save size={18} /></button>
+            <label className="text-sm text-muted">Sube el nuevo logo</label>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <label className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", flex: 1, justifyContent: "center" }}>
+                <Upload size={18} />
+                {tempLogoFile ? tempLogoFile.name : "Seleccionar Imagen"}
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setTempLogoFile(e.target.files[0])} />
+              </label>
+              <button className="btn btn-primary" onClick={handleSaveLogo} disabled={isSaving || !tempLogoFile}><Save size={18} /></button>
               <button className="btn-icon text-muted" onClick={() => setIsEditingLogo(false)}><X size={18} /></button>
             </div>
           </div>

@@ -16,18 +16,33 @@ function LoginContent() {
         <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
           Bienvenido a <span className="text-gradient">L4D2</span>
         </h1>
-        <p className="text-muted">Inicia sesión para crear o administrar torneos</p>
+        <p className="text-muted">
+          Inicia sesión para crear o administrar torneos
+        </p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {/* Steam Button */}
         <button
           className="btn btn-secondary login-btn"
-          style={{ backgroundColor: "#171a21", color: "white", borderColor: "#2a2e38" }}
+          style={{
+            backgroundColor: "#171a21",
+            color: "white",
+            borderColor: "#2a2e38",
+          }}
           onClick={() => signIn("steam", { callbackUrl })}
         >
-          <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-            <path d="M11.97 0C5.35 0 0 5.37 0 12c0 6.63 5.35 12 11.97 12 6.63 0 12-5.37 12-12C23.97 5.37 18.6 0 11.97 0zm-1.8 17.6c-1.3-.6-2-1.7-2-2.8 0-1.2.9-2.2 2.2-2.2.3 0 .7.1 1 .2l2.3-3.4c-.1 0-.2 0-.3 0-3.3 0-6 2.7-6 6 0 1.2.3 2.3.9 3.2L6.8 20.3c-.6.3-1.4.3-2 .2-.2-.2-.5-.4-.7-.6-.2-.2-.3-.5-.3-.7 0-.3.1-.6.3-.9l3.5-3.5c-.3-1-.5-2-.5-3.1 0-4.4 3.6-8 8-8s8 3.6 8 8c0 4.2-3.3 7.6-7.5 7.9l-2.4-1.2c.2-.2.3-.5.3-.8.1-.5-.1-1-.5-1.3z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+          >
+            <title xmlns="">steam</title>
+            <path
+              fill="currentColor"
+              d="M12 2a10 10 0 0 1 10 10a10 10 0 0 1-10 10c-4.6 0-8.45-3.08-9.64-7.27l3.83 1.58a2.84 2.84 0 0 0 2.78 2.27c1.56 0 2.83-1.27 2.83-2.83v-.13l3.4-2.43h.08c2.08 0 3.77-1.69 3.77-3.77s-1.69-3.77-3.77-3.77s-3.78 1.69-3.78 3.77v.05l-2.37 3.46l-.16-.01c-.59 0-1.14.18-1.59.49L2 11.2C2.43 6.05 6.73 2 12 2M8.28 17.17c.8.33 1.72-.04 2.05-.84s-.05-1.71-.83-2.04l-1.28-.53c.49-.18 1.04-.19 1.56.03c.53.21.94.62 1.15 1.15c.22.52.22 1.1 0 1.62c-.43 1.08-1.7 1.6-2.78 1.15c-.5-.21-.88-.59-1.09-1.04zm9.52-7.75c0 1.39-1.13 2.52-2.52 2.52a2.52 2.52 0 0 1-2.51-2.52a2.5 2.5 0 0 1 2.51-2.51a2.52 2.52 0 0 1 2.52 2.51m-4.4 0c0 1.04.84 1.89 1.89 1.89c1.04 0 1.88-.85 1.88-1.89s-.84-1.89-1.88-1.89c-1.05 0-1.89.85-1.89 1.89"
+            />
           </svg>
           Iniciar sesión con Steam
         </button>
@@ -35,7 +50,11 @@ function LoginContent() {
         {/* Discord Button */}
         <button
           className="btn btn-secondary login-btn"
-          style={{ backgroundColor: "#5865F2", color: "white", borderColor: "#5865F2" }}
+          style={{
+            backgroundColor: "#5865F2",
+            color: "white",
+            borderColor: "#5865F2",
+          }}
           onClick={() => signIn("discord", { callbackUrl })}
         >
           <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
@@ -47,20 +66,50 @@ function LoginContent() {
         {/* Google Button */}
         <button
           className="btn btn-secondary login-btn"
-          style={{ backgroundColor: "white", color: "#3c4043", borderColor: "#dadce0" }}
+          style={{
+            backgroundColor: "white",
+            color: "#3c4043",
+            borderColor: "#dadce0",
+          }}
           onClick={() => signIn("google", { callbackUrl })}
         >
-          <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-            <path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44-3.96 0-7.14-3.26-7.14-7.27s3.18-7.27 7.14-7.27c1.78 0 3.4.67 4.66 1.88l2.13-2.13C17.2 2.76 14.86 1.5 12.18 1.5 6.38 1.5 1.68 6.2 1.68 12s4.7 10.5 10.5 10.5c5.38 0 10.35-3.88 10.35-10.5 0-.71-.09-1.42-.23-2.13z" fill="#4285F4"/>
-            <path d="M5.38 14.73L2.24 17.2C3.89 20.46 7.24 22.5 11.03 22.5c2.65 0 4.88-.88 6.5-2.38l-3.04-2.36c-.88.59-2.02.94-3.46.94-2.65 0-4.9-1.78-5.71-4.17L5.38 14.73z" fill="#34A853"/>
-            <path d="M11.03 1.5c1.9 0 3.6.65 4.95 1.9l2.2-2.2C16.48-.12 13.93-1.05 11.03-1.05 7.24-1.05 3.89.99 2.24 4.25l3.14 2.47c.81-2.43 3.06-4.22 5.71-4.22z" fill="#EA4335" transform="translate(0, 1.05)" />
-            <path d="M4.66 10.45c-.21.62-.32 1.28-.32 1.95 0 .67.11 1.33.32 1.95l-3.14 2.47C.55 15.35 0 13.73 0 12c0-1.73.55-3.35 1.52-4.82l3.14 3.27z" fill="#FBBC05"/>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 16 16"
+          >
+            <title xmlns="">google</title>
+            <g fill="none" fillRule="evenodd" clipRule="evenodd">
+              <path
+                fill="#f44336"
+                d="M7.209 1.061c.725-.081 1.154-.081 1.933 0a6.57 6.57 0 0 1 3.65 1.82a100 100 0 0 0-1.986 1.93q-1.876-1.59-4.188-.734q-1.696.78-2.362 2.528a78 78 0 0 1-2.148-1.658a.26.26 0 0 0-.16-.027q1.683-3.245 5.26-3.86"
+                opacity=".987"
+              />
+              <path
+                fill="#ffc107"
+                d="M1.946 4.92q.085-.013.161.027a78 78 0 0 0 2.148 1.658A7.6 7.6 0 0 0 4.04 7.99q.037.678.215 1.331L2 11.116Q.527 8.038 1.946 4.92"
+                opacity=".997"
+              />
+              <path
+                fill="#448aff"
+                d="M12.685 13.29a26 26 0 0 0-2.202-1.74q1.15-.812 1.396-2.228H8.122V6.713q3.25-.027 6.497.055q.616 3.345-1.423 6.032a7 7 0 0 1-.51.49"
+                opacity=".999"
+              />
+              <path
+                fill="#43a047"
+                d="M4.255 9.322q1.23 3.057 4.51 2.854a3.94 3.94 0 0 0 1.718-.626q1.148.812 2.202 1.74a6.62 6.62 0 0 1-4.027 1.684a6.4 6.4 0 0 1-1.02 0Q3.82 14.524 2 11.116z"
+                opacity=".993"
+              />
+            </g>
           </svg>
           Iniciar sesión con Google
         </button>
       </div>
-      
-      <style dangerouslySetInnerHTML={{__html: `
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .login-card {
           width: 100%;
           max-width: 400px;
@@ -85,21 +134,44 @@ function LoginContent() {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-      `}} />
+      `,
+        }}
+      />
     </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="container" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div
+      className="container"
+      style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}
+    >
       <header style={{ padding: "1.5rem 0" }}>
-        <Link href="/" className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", border: "none", background: "transparent" }}>
+        <Link
+          href="/"
+          className="btn btn-secondary"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.5rem 1rem",
+            border: "none",
+            background: "transparent",
+          }}
+        >
           <ArrowLeft size={18} /> Volver al inicio
         </Link>
       </header>
 
-      <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <Suspense fallback={<div className="card">Cargando opciones...</div>}>
           <LoginContent />
         </Suspense>

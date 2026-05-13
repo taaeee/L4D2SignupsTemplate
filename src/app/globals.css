@@ -193,6 +193,16 @@ button {
   background: var(--bg-surface-elevated);
 }
 
+.social-icon {
+  transition: transform var(--transition), filter var(--transition) !important;
+}
+
+.social-icon:hover {
+  transform: scale(1.15) translateY(-2px);
+  filter: brightness(1.2);
+  background: transparent !important;
+}
+
 /* Typography utilities */
 .text-gradient {
   background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
