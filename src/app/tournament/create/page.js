@@ -24,15 +24,15 @@ export default function CreateTournament() {
 
   // Template fields
   const [fields, setFields] = useState([
-    { id: Date.now(), name: "Tag", type: "text", options: "" },
-    { id: Date.now() + 1, name: "Region", type: "text", options: "" },
+    { id: Date.now(), name: "Country", type: "text", options: "" },
+    { id: Date.now() + 1, name: "Tag", type: "text", options: "" },
   ]);
   const [playerFields, setPlayerFields] = useState([
     { id: Date.now() + 2, name: "Discord", type: "text", options: "" },
   ]);
 
   const [generalFormat, setGeneralFormat] = useState(
-    `Team: [Team]\nRegion: [Region]`
+    `Team: [Team]\nCountry: [Country]\nTag: [Tag]`
   );
   const [playerFormat, setPlayerFormat] = useState(
     `[ROLE] - [NAME] [STEAMID]\nSteam: [STEAMURL]\nDiscord: [Discord]`

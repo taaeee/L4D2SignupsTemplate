@@ -27,9 +27,15 @@ export default function TeamDetails() {
   // Community Bans State
   const [communityBans, setCommunityBans] = useState([]);
 
-  // Logo Editing State
-  const [isEditingLogo, setIsEditingLogo] = useState(false);
+  // Info Editing State
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [tempLogoFile, setTempLogoFile] = useState(null);
+  
+  const [teamTag, setTeamTag] = useState("");
+  const [teamCountries, setTeamCountries] = useState([]);
+  const [availableCountries, setAvailableCountries] = useState([]);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
 
   // Confirm Modal State
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: "", message: "", onConfirm: () => {}, isDanger: true });
@@ -37,8 +43,24 @@ export default function TeamDetails() {
   useEffect(() => {
     if (tournamentId && teamId && status !== "loading") {
       fetchData();
+      fetchCountries();
     }
   }, [tournamentId, teamId, status]);
+
+  const fetchCountries = async () => {
+    try {
+      const res = await fetch("https://restcountries.com/v3.1/all?fields=name,cca2,flags");
+      const data = await res.json();
+      const formatted = data.map(c => ({
+        name: c.name.common,
+        code: c.cca2.toLowerCase(),
+        flag: c.flags.svg || c.flags.png
+      })).sort((a,b) => a.name.localeCompare(b.name));
+      setAvailableCountries(formatted);
+    } catch (err) {
+      console.error("Error loading countries", err);
+    }
+  };
 
   const fetchData = async () => {
     // 1. Fetch Tournament
@@ -57,8 +79,22 @@ export default function TeamDetails() {
         return;
       }
 
+      let parsedLogo = teamData.logo_url;
+      let initTag = "";
+      let initCountries = [];
+      if (teamData.logo_url && teamData.logo_url.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(teamData.logo_url);
+          parsedLogo = parsed.url;
+          initTag = parsed.tag || "";
+          initCountries = parsed.countries || [];
+        } catch (e) {}
+      }
+
       setTournament(tData);
-      setTeam({ name: teamData.name, logo_url: teamData.logo_url, creator_id: teamData.creator_id });
+      setTeam({ name: teamData.name, logo_url: parsedLogo, raw_logo_url: teamData.logo_url, creator_id: teamData.creator_id });
+      setTeamTag(initTag);
+      setTeamCountries(initCountries);
       setPlayers(membersData || []);
     }
 
@@ -178,30 +214,43 @@ export default function TeamDetails() {
   };
 
   // -------------------------
-  // UPDATE TEAM LOGO
+  // UPDATE TEAM INFO (LOGO, TAG, COUNTRIES)
   // -------------------------
-  const handleSaveLogo = async () => {
+  const handleSaveInfo = async () => {
     if (!(await checkPermissionToEdit())) return;
-    if (!tempLogoFile) return toast.error("Selecciona una imagen primero.");
     
     setIsSaving(true);
     try {
-      const fileExt = tempLogoFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("team-logos")
-        .upload(fileName, tempLogoFile);
+      let finalUrl = team.logo_url;
 
-      if (uploadError) throw new Error("Error subiendo el logo: " + uploadError.message);
-      
-      const { data: { publicUrl } } = supabase.storage.from("team-logos").getPublicUrl(fileName);
+      if (tempLogoFile) {
+        const fileExt = tempLogoFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("team-logos")
+          .upload(fileName, tempLogoFile);
 
-      const { error } = await supabase.from("teams").update({ logo_url: publicUrl }).eq("id", teamId);
+        if (uploadError) throw new Error("Error subiendo el logo: " + uploadError.message);
+        
+        const { data: { publicUrl } } = supabase.storage.from("team-logos").getPublicUrl(fileName);
+        finalUrl = publicUrl;
+      }
+
+      let finalLogoString = finalUrl;
+      if (teamTag || teamCountries.length > 0) {
+        finalLogoString = JSON.stringify({
+          url: finalUrl || "",
+          tag: teamTag,
+          countries: teamCountries
+        });
+      }
+
+      const { error } = await supabase.from("teams").update({ logo_url: finalLogoString }).eq("id", teamId);
       if (error) throw new Error("Error actualizando la base de datos.");
 
-      setTeam({ ...team, logo_url: publicUrl });
-      toast.success("Logo actualizado con éxito.");
-      setIsEditingLogo(false);
+      setTeam({ ...team, logo_url: finalUrl, raw_logo_url: finalLogoString });
+      toast.success("Información del equipo actualizada con éxito.");
+      setIsEditingInfo(false);
       setTempLogoFile(null);
     } catch (err) {
       toast.error(err.message);
@@ -319,31 +368,107 @@ export default function TeamDetails() {
             alt={team.name} 
             style={{ width: "100px", height: "100px", borderRadius: "16px", objectFit: "cover" }} 
           />
-          {canEdit && !isEditingLogo && (
-            <button className="btn btn-secondary text-sm" style={{ padding: "0.3rem" }} onClick={() => { setIsEditingLogo(true); setTempLogoFile(null); }}>
-              Editar Logo
+          {canEdit && !isEditingInfo && (
+            <button className="btn btn-secondary text-sm" style={{ padding: "0.3rem" }} onClick={() => { setIsEditingInfo(true); setTempLogoFile(null); }}>
+              Editar Perfil
             </button>
           )}
         </div>
         
-        {isEditingLogo && canEdit && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", flex: 1, minWidth: "250px" }}>
-            <label className="text-sm text-muted">Sube el nuevo logo</label>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <label className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", flex: 1, justifyContent: "center" }}>
-                <Upload size={18} />
-                {tempLogoFile ? tempLogoFile.name : "Seleccionar Imagen"}
-                <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setTempLogoFile(e.target.files[0])} />
-              </label>
-              <button className="btn btn-primary" onClick={handleSaveLogo} disabled={isSaving || !tempLogoFile}><Save size={18} /></button>
-              <button className="btn-icon text-muted" onClick={() => setIsEditingLogo(false)}><X size={18} /></button>
+        {isEditingInfo && canEdit && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minWidth: "250px", background: "rgba(255,255,255,0.05)", padding: "1rem", borderRadius: "16px" }}>
+            <div>
+              <label className="text-sm text-muted">Sube un nuevo logo (Opcional)</label>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <label className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", flex: 1, justifyContent: "center" }}>
+                  <Upload size={18} />
+                  {tempLogoFile ? tempLogoFile.name : "Seleccionar Imagen"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setTempLogoFile(e.target.files[0])} />
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-muted block mb-1">Tag del Equipo</label>
+              <input className="input-base" value={teamTag} onChange={e => setTeamTag(e.target.value)} placeholder="Ej: ^" />
+            </div>
+
+            <div style={{ position: "relative" }}>
+              <label className="text-sm text-muted block mb-1">Países del Equipo</label>
+              {teamCountries.length > 0 && (
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                  {teamCountries.map(c => (
+                    <div key={c.code} style={{ display: "flex", alignItems: "center", gap: "0.25rem", background: "rgba(255,255,255,0.1)", padding: "0.25rem 0.5rem", borderRadius: "16px", fontSize: "0.85rem" }}>
+                      <img src={c.flag} alt={c.name} style={{ width: 16, height: 12, objectFit: "cover", borderRadius: 2 }} />
+                      <span>{c.name}</span>
+                      <button type="button" onClick={() => setTeamCountries(teamCountries.filter(tc => tc.code !== c.code))} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", marginLeft: "0.25rem" }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input 
+                className="input-base" 
+                placeholder="Buscar país..." 
+                value={countrySearch} 
+                onChange={e => {
+                  setCountrySearch(e.target.value);
+                  setShowCountryDropdown(true);
+                }}
+                onFocus={() => setShowCountryDropdown(true)}
+              />
+              {showCountryDropdown && (
+                <div style={{ position: "absolute", top: "100%", left: 0, width: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", maxHeight: "200px", overflowY: "auto", zIndex: 10, marginTop: "0.25rem" }}>
+                  {availableCountries
+                    .filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()))
+                    .map(c => (
+                      <div 
+                        key={c.code}
+                        onClick={() => {
+                          if (!teamCountries.find(tc => tc.code === c.code)) {
+                            setTeamCountries([...teamCountries, c]);
+                          }
+                          setCountrySearch("");
+                          setShowCountryDropdown(false);
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", cursor: "pointer" }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                      >
+                        <img src={c.flag} alt={c.name} style={{ width: 24, height: 16, objectFit: "cover", borderRadius: 2 }} />
+                        <span>{c.name}</span>
+                      </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <button className="btn btn-primary" onClick={handleSaveInfo} disabled={isSaving} style={{ flex: 1 }}><Save size={18} /> Guardar Cambios</button>
+              <button className="btn-icon text-muted" onClick={() => setIsEditingInfo(false)}><X size={18} /></button>
             </div>
           </div>
         )}
 
-        {!isEditingLogo && (
+        {!isEditingInfo && (
           <div>
-          <h1 style={{ margin: 0, fontSize: "2.5rem" }}>{team.name}</h1>
+          <h1 style={{ margin: 0, fontSize: "2.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {team.name}
+            {teamCountries.length > 0 && (
+              <div style={{ display: "flex", gap: "0.25rem", marginLeft: "0.5rem", flexWrap: "wrap" }}>
+                {teamCountries.map(c => (
+                  <img 
+                    key={c.code} 
+                    src={c.flag} 
+                    alt={c.name} 
+                    title={c.name}
+                    style={{ height: "24px", borderRadius: "2px", boxShadow: "0 2px 4px rgba(0,0,0,0.5)", objectFit: "cover" }} 
+                  />
+                ))}
+              </div>
+            )}
+          </h1>
           <p className="text-muted">Torneo: {tournament.name}</p>
           {!canEdit && isCaptain && isLocked && (
              <p className="text-danger">El torneo ha iniciado. No puedes editar tu equipo.</p>

@@ -9,6 +9,10 @@
   --primary-hover: #22c55e;
   --primary-glow: rgba(74, 222, 128, 0.2);
   
+  --success: #22c55e;
+  --warning: #facc15;
+  --danger: #ef4444;
+  
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-disabled: #475569;
@@ -222,6 +226,18 @@ button {
 
 .text-muted {
   color: var(--text-muted);
+}
+
+.text-success {
+  color: var(--success);
+}
+
+.text-warning {
+  color: var(--warning);
+}
+
+.text-danger {
+  color: var(--danger);
 }
 
 /* Layout Utilities */

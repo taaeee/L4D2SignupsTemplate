@@ -16,6 +16,13 @@ export default function RegisterTeam() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Custom Tag & Country State
+  const [teamTag, setTeamTag] = useState("");
+  const [teamCountries, setTeamCountries] = useState([]);
+  const [availableCountries, setAvailableCountries] = useState([]);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+  
   // Steam Friends State
   const [friends, setFriends] = useState([]);
   const [friendsSearch, setFriendsSearch] = useState("");
@@ -35,8 +42,24 @@ export default function RegisterTeam() {
       router.push("/");
     } else if (status === "authenticated" && id) {
       fetchData();
+      fetchCountries();
     }
   }, [id, status, router]);
+
+  const fetchCountries = async () => {
+    try {
+      const res = await fetch("https://restcountries.com/v3.1/all?fields=name,cca2,flags");
+      const data = await res.json();
+      const formatted = data.map(c => ({
+        name: c.name.common,
+        code: c.cca2.toLowerCase(),
+        flag: c.flags.svg || c.flags.png
+      })).sort((a,b) => a.name.localeCompare(b.name));
+      setAvailableCountries(formatted);
+    } catch (err) {
+      console.error("Error loading countries", err);
+    }
+  };
 
   const fetchData = async () => {
     const { data, error } = await supabase.from("tournaments").select("*").eq("id", id).single();
@@ -186,16 +209,22 @@ export default function RegisterTeam() {
       }
 
       // 3. Insert Team
-      // Save custom team answers in a JSON field (we can add `custom_fields` column to teams or just merge it into a string format)
-      // Since we didn't add a custom JSON column to `teams`, we'll just format it and we'll trust the base table. Wait, we should probably add `custom_data` to teams and team_members if needed. 
-      // For now we'll just save the base fields requested. If needed we can alter table.
+      // Encode tag and countries into logo_url if needed
+      let finalLogo = logoUrl;
+      if (teamTag || teamCountries.length > 0) {
+        finalLogo = JSON.stringify({
+          url: logoUrl || "",
+          tag: teamTag,
+          countries: teamCountries
+        });
+      }
 
       const { data: teamData, error: teamError } = await supabase
         .from("teams")
         .insert([{ 
           tournament_id: id, 
           name: teamName, 
-          logo_url: logoUrl,
+          logo_url: finalLogo,
           creator_id: session.user.id 
         }])
         .select()
@@ -259,7 +288,70 @@ export default function RegisterTeam() {
               </label>
             </div>
 
-            {tpl.fields?.map(field => (
+            <div>
+              <label className="text-sm text-muted font-medium block mb-2">Tag del Equipo (Opcional)</label>
+              <input className="input-base" placeholder="Ej: ^" value={teamTag} onChange={e => setTeamTag(e.target.value)} />
+            </div>
+
+            <div style={{ position: "relative" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Países del Equipo (Opcional)</label>
+              
+              {/* Selected Countries Tags */}
+              {teamCountries.length > 0 && (
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                  {teamCountries.map(c => (
+                    <div key={c.code} style={{ display: "flex", alignItems: "center", gap: "0.25rem", background: "rgba(255,255,255,0.1)", padding: "0.25rem 0.5rem", borderRadius: "16px", fontSize: "0.85rem" }}>
+                      <img src={c.flag} alt={c.name} style={{ width: 16, height: 12, objectFit: "cover", borderRadius: 2 }} />
+                      <span>{c.name}</span>
+                      <button type="button" onClick={() => setTeamCountries(teamCountries.filter(tc => tc.code !== c.code))} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", marginLeft: "0.25rem" }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <input 
+                className="input-base" 
+                placeholder="Buscar y añadir país..." 
+                value={countrySearch} 
+                onChange={e => {
+                  setCountrySearch(e.target.value);
+                  setShowCountryDropdown(true);
+                }}
+                onFocus={() => setShowCountryDropdown(true)}
+              />
+              
+              {showCountryDropdown && (
+                <div style={{ position: "absolute", top: "100%", left: 0, width: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", maxHeight: "200px", overflowY: "auto", zIndex: 10, marginTop: "0.25rem" }}>
+                  {availableCountries
+                    .filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()))
+                    .map(c => (
+                      <div 
+                        key={c.code}
+                        onClick={() => {
+                          if (!teamCountries.find(tc => tc.code === c.code)) {
+                            setTeamCountries([...teamCountries, c]);
+                          }
+                          setCountrySearch("");
+                          setShowCountryDropdown(false);
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", cursor: "pointer" }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                      >
+                        <img src={c.flag} alt={c.name} style={{ width: 24, height: 16, objectFit: "cover", borderRadius: 2 }} />
+                        <span>{c.name}</span>
+                      </div>
+                  ))}
+                  {availableCountries.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())).length === 0 && (
+                    <div style={{ padding: "0.5rem 1rem", color: "var(--muted)" }}>No se encontraron países</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {tpl.fields?.filter(f => f.name !== "Country" && f.name !== "Region" && f.name !== "Tag").map(field => (
               <div key={field.name}>
                 <label className="text-sm text-muted font-medium block mb-2">{field.name}</label>
                 {field.type === "select" ? (

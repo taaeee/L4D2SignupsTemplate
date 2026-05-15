@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
 import ReactMarkdown from "react-markdown";
+import BracketViewer from "@/components/BracketViewer";
 
 const generateId = (children) => {
   const extractText = (node) => {
@@ -41,6 +42,9 @@ export default function TournamentDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedTeams, setExpandedTeams] = useState({});
   const [teamsSearch, setTeamsSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("teams");
+  const [matches, setMatches] = useState([]);
+  const [isGeneratingBracket, setIsGeneratingBracket] = useState(false);
 
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -76,6 +80,15 @@ export default function TournamentDetails() {
 
     if (!teamsError && teamsData) {
       setTeams(teamsData);
+    }
+
+    // Fetch Matches
+    const { data: matchesData } = await supabase
+      .from("matches")
+      .select("*")
+      .eq("tournament_id", id);
+    if (matchesData) {
+      setMatches(matchesData);
     }
 
     try {
@@ -162,6 +175,34 @@ export default function TournamentDetails() {
   const isFull = acceptedTeamsAll.length >= tournament.max_teams;
   const isRegistrationFull = teams.length >= 300;
 
+  const handleGenerateBracket = async () => {
+    const isRegen = tournament.bracket_status === 'generated' || tournament.bracket_status === 'completed';
+    const msg = isRegen 
+      ? "¿Estás seguro de REGENERAR las llaves? Esto ELIMINARÁ el progreso actual de todas las partidas y mezclará los equipos de nuevo." 
+      : "¿Estás seguro de generar las llaves? Esto no se puede deshacer y asignará los equipos aleatoriamente.";
+    
+    if (!confirm(msg)) return;
+    
+    setIsGeneratingBracket(true);
+    try {
+      const res = await fetch(`/api/tournament/${id}/bracket/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: isRegen })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      toast.success("Llaves generadas correctamente.");
+      fetchData(); // Reload everything
+      setActiveTab("bracket");
+    } catch (e) {
+      toast.error(e.message || "Error al generar llaves");
+    } finally {
+      setIsGeneratingBracket(false);
+    }
+  };
+
   const handleAcceptTeam = async (teamId) => {
     if (acceptedTeamsAll.length >= tournament.max_teams) {
       return toast.error(
@@ -206,6 +247,19 @@ export default function TournamentDetails() {
   const renderTeamCard = (team) => {
     const isAccepted = team.status === "accepted";
     const isExpanded = !isAccepted || expandedTeams[team.id];
+
+    let parsedLogo = team.logo_url;
+    let teamTag = "";
+    let teamCountries = [];
+
+    if (team.logo_url && team.logo_url.startsWith("{")) {
+      try {
+        const data = JSON.parse(team.logo_url);
+        parsedLogo = data.url;
+        teamTag = data.tag || "";
+        teamCountries = data.countries || [];
+      } catch (e) {}
+    }
 
     const players = team.team_members || [];
     const validHours = players.map((p) => Number(p.l4d2_playtime_hours) || 0);
@@ -257,7 +311,7 @@ export default function TournamentDetails() {
           >
             <img
               src={
-                team.logo_url || "https://ui-avatars.com/api/?name=" + team.name
+                parsedLogo || "https://ui-avatars.com/api/?name=" + team.name
               }
               alt={team.name}
               style={{
@@ -270,18 +324,39 @@ export default function TournamentDetails() {
             />
           </div>
 
-          {/* Name */}
+          {/* Name & Flags */}
           <div style={{ flex: 1, padding: "1rem 1rem 1rem 0" }}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: isExpanded ? "1.6rem" : "1.2rem",
-                transition: "font-size 0.4s ease",
-                wordBreak: "break-word",
-              }}
-            >
-              {team.name}
-            </h3>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: isExpanded ? "1.6rem" : "1.2rem",
+                  transition: "font-size 0.4s ease",
+                  wordBreak: "break-word",
+                }}
+              >
+                {team.name}
+              </h3>
+              {teamCountries.length > 0 && (
+                <div style={{ display: "flex", gap: "0.3rem", marginLeft: "0.5rem", flexWrap: "wrap" }}>
+                  {teamCountries.map(c => (
+                    <img 
+                      key={c.code} 
+                      src={c.flag} 
+                      alt={c.name} 
+                      title={c.name}
+                      style={{ 
+                        height: isExpanded ? "20px" : "16px", 
+                        borderRadius: "2px", 
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.5)",
+                        transition: "height 0.4s ease",
+                        objectFit: "cover"
+                      }} 
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Expand Toggle */}
@@ -420,7 +495,7 @@ export default function TournamentDetails() {
                             rel="noreferrer"
                             className="player-link"
                           >
-                            {p.name}
+                            {teamTag ? `${teamTag} ${p.name}` : p.name}
                           </a>
                         </div>
                       </td>
@@ -894,6 +969,57 @@ export default function TournamentDetails() {
       </div>
 
       <main>
+        {/* TABS */}
+        <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", borderBottom: "1px solid var(--border-light)", paddingBottom: "0.5rem" }}>
+          <button 
+            className={`btn ${activeTab === 'teams' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ borderRadius: "8px", background: activeTab === 'teams' ? 'var(--primary)' : 'transparent' }}
+            onClick={() => setActiveTab('teams')}
+          >
+            Equipos Inscritos
+          </button>
+          <button 
+            className={`btn ${activeTab === 'bracket' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ borderRadius: "8px", background: activeTab === 'bracket' ? 'var(--primary)' : 'transparent' }}
+            onClick={() => setActiveTab('bracket')}
+          >
+            Llaves (Bracket)
+          </button>
+        </div>
+
+        {activeTab === 'bracket' && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+              <h2 style={{ margin: 0, color: "var(--primary)" }}>Llaves del Torneo</h2>
+              {canManage && (
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleGenerateBracket}
+                  disabled={isGeneratingBracket || acceptedTeamsAll.length < 2}
+                  style={{ background: tournament.bracket_status === 'generated' ? 'var(--warning)' : 'var(--primary)', color: '#000' }}
+                >
+                  {isGeneratingBracket ? "Generando..." : (tournament.bracket_status === 'generated' || tournament.bracket_status === 'completed' ? "Regenerar Llaves" : "Generar Llaves")}
+                </button>
+              )}
+            </div>
+            
+            {(tournament.bracket_status === 'generated' || tournament.bracket_status === 'completed') ? (
+               <BracketViewer 
+                 matches={matches} 
+                 teams={acceptedTeamsAll} 
+                 canManage={canManage} 
+                 onMatchUpdated={fetchData} 
+               />
+            ) : (
+              <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
+                <p className="text-muted">Las llaves aún no han sido generadas.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'teams' && (
+          <>
         <div
           style={{
             display: "flex",
@@ -996,6 +1122,8 @@ export default function TournamentDetails() {
           >
             {pendingTeams.map((team) => renderTeamCard(team))}
           </div>
+        )}
+        </>
         )}
       </main>
 

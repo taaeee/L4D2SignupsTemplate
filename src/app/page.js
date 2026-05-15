@@ -5,7 +5,17 @@ import LoginButton from "@/components/LoginButton";
 import { useSession, signIn } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { Copy, Link as LinkIcon, CheckCircle, Trophy, Settings } from "lucide-react";
+import {
+  Copy,
+  Link as LinkIcon,
+  CheckCircle,
+  Trophy,
+  Settings,
+  Users,
+  Gamepad2,
+  ShieldCheck,
+  AlignEndHorizontal
+} from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -97,7 +107,9 @@ export default function Home() {
       .limit(50);
 
     if (!error4 && publicTData) {
-      setPublicTournaments(publicTData.filter(t => !t.template_json?.isPrivate));
+      setPublicTournaments(
+        publicTData.filter((t) => !t.template_json?.isPrivate)
+      );
     } else {
       console.error("Error fetching public tournaments:", error4);
     }
@@ -189,149 +201,238 @@ export default function Home() {
             <h3
               style={{
                 textAlign: "center",
-                fontSize: "2rem",
-                marginBottom: "3rem",
+                fontSize: "2.5rem",
+                marginBottom: "4rem",
               }}
             >
               ¿Cómo funciona?
             </h3>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                gap: "2rem",
-              }}
-            >
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
-                }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.transform = "translateY(-5px)")
-                }
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
-              >
-                <div
-                  style={{
-                    background: "rgba(255, 60, 60, 0.1)",
-                    width: "64px",
-                    height: "64px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 1.5rem",
-                  }}
-                >
-                  <svg
-                    width="32"
-                    height="32"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="var(--primary)"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                    <path d="M4 22h16" />
-                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                  </svg>
-                </div>
-                <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  1. Crea tu torneo
-                </h4>
-                <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Configura las reglas, regiones, límite de equipos y requisitos
-                  de registro en segundos.
-                </p>
-              </div>
 
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
-                }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.transform = "translateY(-5px)")
-                }
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
-              >
-                <div
-                  style={{
-                    background: "rgba(255, 60, 60, 0.1)",
-                    width: "64px",
-                    height: "64px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 1.5rem",
-                  }}
-                >
-                  <LinkIcon size={32} color="var(--primary)" />
-                </div>
-                <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  2. Comparte el enlace
-                </h4>
-                <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Envía el enlace de registro a los capitanes. El sistema
-                  recopilará automáticamente los Steam IDs reales.
-                </p>
+            {/* ORGANIZADOR */}
+            <div style={{ marginBottom: "5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem", justifyContent: "center" }}>
+                <Trophy size={32} color="var(--primary)" />
+                <h4 style={{ fontSize: "1.8rem", margin: 0 }}>Para Organizadores</h4>
               </div>
-
               <div
                 style={{
-                  textAlign: "center",
-                  padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "2rem",
                 }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.transform = "translateY(-5px)")
-                }
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
               >
                 <div
+                  className="card"
                   style={{
-                    background: "rgba(255, 60, 60, 0.1)",
-                    width: "64px",
-                    height: "64px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 1.5rem",
+                    textAlign: "center",
+                    padding: "2.5rem 2rem",
+                    transition: "transform 0.2s",
+                    borderTop: "3px solid var(--primary)",
                   }}
+                  onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+                  onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
                 >
-                  <svg
-                    width="32"
-                    height="32"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="var(--primary)"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  <div
+                    style={{
+                      background: "rgba(255, 60, 60, 0.1)",
+                      width: "64px",
+                      height: "64px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 1.5rem",
+                    }}
                   >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
+                    <Settings size={32} color="var(--primary)" />
+                  </div>
+                  <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
+                    1. Crea tu torneo
+                  </h4>
+                  <p className="text-muted" style={{ fontSize: "0.95rem" }}>
+                    Configura las reglas, regiones, límite de equipos y personaliza los campos de registro en segundos.
+                  </p>
                 </div>
-                <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  3. Gestiona equipos
-                </h4>
-                <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Revisa, acepta o rechaza las inscripciones desde un panel de
-                  administración unificado.
-                </p>
+
+                <div
+                  className="card"
+                  style={{
+                    textAlign: "center",
+                    padding: "2.5rem 2rem",
+                    transition: "transform 0.2s",
+                    borderTop: "3px solid var(--primary)",
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+                  onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
+                >
+                  <div
+                    style={{
+                      background: "rgba(255, 60, 60, 0.1)",
+                      width: "64px",
+                      height: "64px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 1.5rem",
+                    }}
+                  >
+                    <LinkIcon size={32} color="var(--primary)" />
+                  </div>
+                  <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
+                    2. Comparte el enlace
+                  </h4>
+                  <p className="text-muted" style={{ fontSize: "0.95rem" }}>
+                    Envía el enlace de registro a los capitanes. El sistema recopilará automáticamente los Steam IDs reales.
+                  </p>
+                </div>
+
+                <div
+                  className="card"
+                  style={{
+                    textAlign: "center",
+                    padding: "2.5rem 2rem",
+                    transition: "transform 0.2s",
+                    borderTop: "3px solid var(--primary)",
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+                  onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
+                >
+                  <div
+                    style={{
+                      background: "rgba(255, 60, 60, 0.1)",
+                      width: "64px",
+                      height: "64px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 1.5rem",
+                    }}
+                  >
+                    <AlignEndHorizontal size={32} color="var(--primary)" />
+                  </div>
+                  <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
+                    3. Gestiona y Genera Llaves
+                  </h4>
+                  <p className="text-muted" style={{ fontSize: "0.95rem" }}>
+                    Revisa las inscripciones, gestiona baneos y genera automáticamente las llaves del torneo (bracket).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* PARTICIPANTE */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem", justifyContent: "center" }}>
+                <Gamepad2 size={32} color="var(--success)" />
+                <h4 style={{ fontSize: "1.8rem", margin: 0 }}>Para Participantes</h4>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "2rem",
+                }}
+              >
+                <div
+                  className="card"
+                  style={{
+                    textAlign: "center",
+                    padding: "2.5rem 2rem",
+                    transition: "transform 0.2s",
+                    borderTop: "3px solid var(--success)",
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+                  onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
+                >
+                  <div
+                    style={{
+                      background: "rgba(34, 197, 94, 0.1)",
+                      width: "64px",
+                      height: "64px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 1.5rem",
+                    }}
+                  >
+                    <ShieldCheck size={32} color="var(--success)" />
+                  </div>
+                  <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
+                    1. Vincula tu cuenta
+                  </h4>
+                  <p className="text-muted" style={{ fontSize: "0.95rem" }}>
+                    Inicia sesión de forma segura a través de Steam. Esto garantiza la integridad de la competencia.
+                  </p>
+                </div>
+
+                <div
+                  className="card"
+                  style={{
+                    textAlign: "center",
+                    padding: "2.5rem 2rem",
+                    transition: "transform 0.2s",
+                    borderTop: "3px solid var(--success)",
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+                  onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
+                >
+                  <div
+                    style={{
+                      background: "rgba(34, 197, 94, 0.1)",
+                      width: "64px",
+                      height: "64px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 1.5rem",
+                    }}
+                  >
+                    <Users size={32} color="var(--success)" />
+                  </div>
+                  <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
+                    2. Inscribe a tu equipo
+                  </h4>
+                  <p className="text-muted" style={{ fontSize: "0.95rem" }}>
+                    Añade a tus amigos a la lista directamente desde tu perfil de Steam, elige un tag, país y un logo.
+                  </p>
+                </div>
+
+                <div
+                  className="card"
+                  style={{
+                    textAlign: "center",
+                    padding: "2.5rem 2rem",
+                    transition: "transform 0.2s",
+                    borderTop: "3px solid var(--success)",
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+                  onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
+                >
+                  <div
+                    style={{
+                      background: "rgba(34, 197, 94, 0.1)",
+                      width: "64px",
+                      height: "64px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 1.5rem",
+                    }}
+                  >
+                    <Trophy size={32} color="var(--success)" />
+                  </div>
+                  <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
+                    3. Compite y avanza
+                  </h4>
+                  <p className="text-muted" style={{ fontSize: "0.95rem" }}>
+                    Sigue tu progreso en vivo desde el panel del torneo y visualiza de forma dinámica a tus contrincantes.
+                  </p>
+                </div>
               </div>
             </div>
           </section>
@@ -667,21 +768,28 @@ export default function Home() {
                           gap: "0.5rem",
                         }}
                       >
-                          <button
-                            className="btn btn-secondary"
-                            style={{ flex: 1 }}
-                            onClick={() => router.push(`/tournament/${t.id}`)}
-                          >
-                            Gestionar
-                          </button>
-                          <button
-                            className="btn btn-secondary btn-icon"
-                            title="Configuración"
-                            onClick={() => router.push(`/tournament/${t.id}/edit`)}
-                            style={{ padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center" }}
-                          >
-                            <Settings size={20} />
-                          </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ flex: 1 }}
+                          onClick={() => router.push(`/tournament/${t.id}`)}
+                        >
+                          Gestionar
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-icon"
+                          title="Configuración"
+                          onClick={() =>
+                            router.push(`/tournament/${t.id}/edit`)
+                          }
+                          style={{
+                            padding: "0.75rem",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Settings size={20} />
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -788,15 +896,37 @@ export default function Home() {
                             gap: "0.75rem",
                             transition: "background 0.2s ease",
                           }}
-                          onMouseOver={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)"}
-                          onMouseOut={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.03)"}
+                          onMouseOver={(e) =>
+                            (e.currentTarget.style.background =
+                              "rgba(255, 255, 255, 0.06)")
+                          }
+                          onMouseOut={(e) =>
+                            (e.currentTarget.style.background =
+                              "rgba(255, 255, 255, 0.03)")
+                          }
                         >
-                          <div style={{ background: "rgba(74, 222, 128, 0.1)", padding: "0.5rem", borderRadius: "6px" }}>
+                          <div
+                            style={{
+                              background: "rgba(74, 222, 128, 0.1)",
+                              padding: "0.5rem",
+                              borderRadius: "6px",
+                            }}
+                          >
                             <Trophy size={16} color="var(--primary)" />
                           </div>
-                          <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span className="text-xs text-muted">Torneo Inscrito</span>
-                            <span style={{ fontWeight: "bold", color: "var(--text-main)", fontSize: "0.95rem" }}>
+                          <div
+                            style={{ display: "flex", flexDirection: "column" }}
+                          >
+                            <span className="text-xs text-muted">
+                              Torneo Inscrito
+                            </span>
+                            <span
+                              style={{
+                                fontWeight: "bold",
+                                color: "var(--text-main)",
+                                fontSize: "0.95rem",
+                              }}
+                            >
                               {team.tournaments?.name || "Desconocido"}
                             </span>
                           </div>
@@ -822,9 +952,7 @@ export default function Home() {
                             className="btn btn-primary"
                             style={{ flex: 1 }}
                             onClick={() =>
-                              router.push(
-                                `/tournament/${team.tournament_id}`
-                              )
+                              router.push(`/tournament/${team.tournament_id}`)
                             }
                           >
                             Ver Torneo

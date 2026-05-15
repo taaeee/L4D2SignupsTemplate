@@ -7,15 +7,17 @@ import LZString from "lz-string";
 export default function TemplateBuilder() {
   const [fields, setFields] = useState([
     { id: Date.now(), name: "Team", type: "text", options: "" },
-    { id: Date.now() + 1, name: "Region", type: "text", options: "" },
+    { id: Date.now() + 1, name: "Country", type: "text", options: "" },
+    { id: Date.now() + 2, name: "Tag", type: "text", options: "" },
   ]);
   const [playerFields, setPlayerFields] = useState([
-    { id: Date.now() + 2, name: "Discord", type: "text", options: "" },
+    { id: Date.now() + 3, name: "Discord", type: "text", options: "" },
   ]);
 
   const [generalFormat, setGeneralFormat] = useState(
     `Team: [Team]
-Region: [Region]`
+Country: [Country]
+Tag: [Tag]`
   );
 
   const [playerFormat, setPlayerFormat] = useState(
