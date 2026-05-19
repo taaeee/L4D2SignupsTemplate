@@ -1,26 +1,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-base: #0f1115;
-  --bg-surface: #1a1d24;
-  --bg-surface-elevated: #252830;
+  --bg-base: #0F1113;
+  --bg-surface: #1B1E22;
+  --bg-surface-elevated: #252A30;
   
-  --primary: #4ade80;
-  --primary-hover: #22c55e;
-  --primary-glow: rgba(74, 222, 128, 0.2);
+  --primary: #6FAF3A;
+  --primary-hover: #8EDB4D;
+  --primary-glow: rgba(111, 175, 58, 0.2);
   
-  --success: #22c55e;
+  --success: #6FAF3A;
   --warning: #facc15;
-  --danger: #ef4444;
+  --danger: #B32025;
+  --danger-hover: #E63946;
   
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --text-main: #E5E5E5;
+  --text-muted: #9CA3AF;
   --text-disabled: #475569;
   
   --border-light: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(74, 222, 128, 0.5);
+  --border-focus: rgba(111, 175, 58, 0.5);
   
-  --glass-bg: rgba(26, 29, 36, 0.6);
+  --glass-bg: rgba(27, 30, 34, 0.6);
   --glass-border: rgba(255, 255, 255, 0.05);
   
   --radius-md: 8px;
@@ -45,8 +46,8 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   background-image: 
-    radial-gradient(circle at 15% 50%, rgba(74, 222, 128, 0.04), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.04), transparent 25%);
+    radial-gradient(circle at 15% 50%, rgba(111, 175, 58, 0.04), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(179, 32, 37, 0.04), transparent 25%);
   background-attachment: fixed;
 }
 
@@ -105,7 +106,7 @@ button {
 
 .card:hover {
   background: var(--bg-surface-elevated);
-  border-color: rgba(74, 222, 128, 0.3); /* Subtle primary tint */
+  border-color: rgba(111, 175, 58, 0.3); /* Subtle primary tint */
   transform: translateY(-4px);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
 }
@@ -156,7 +157,7 @@ button {
 .btn-primary:hover {
   background: var(--primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(74, 222, 128, 0.3);
+  box-shadow: 0 6px 20px rgba(142, 219, 77, 0.3);
 }
 
 .btn-primary:active {
@@ -175,14 +176,14 @@ button {
 }
 
 .btn-danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(179, 32, 37, 0.1); /* #B32025 at 10% */
+  color: var(--danger-hover);
+  border: 1px solid rgba(179, 32, 37, 0.2);
 }
 
 .btn-danger:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(230, 57, 70, 0.15); /* #E63946 at 15% */
+  border-color: rgba(230, 57, 70, 0.3);
 }
 
 .btn-icon {

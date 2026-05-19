@@ -17,10 +17,12 @@ export default function CreateTournament() {
   const [isSaving, setIsSaving] = useState(false);
 
   // New Tournament Options
-  const [logoUrl, setLogoUrl] = useState("");
+  const [logoFile, setLogoFile] = useState(null);
   const [rules, setRules] = useState("");
   const [socialLinks, setSocialLinks] = useState({ twitch: "", twitter: "", youtube: "", discord: "" });
   const [isPrivate, setIsPrivate] = useState(false);
+  const [is1v1, setIs1v1] = useState(false);
+  const [tournamentFormat, setTournamentFormat] = useState("single_elimination");
 
   // Template fields
   const [fields, setFields] = useState([
@@ -60,13 +62,31 @@ export default function CreateTournament() {
       playerFields: playerFields.map(f => ({ name: f.name, type: f.type, options: f.options })),
       generalFormat,
       playerFormat,
-      maxPlayers: Number(maxPlayers) || 8,
+      maxPlayers: is1v1 ? 1 : (Number(maxPlayers) || 8),
       defaultRole,
-      logo_url: logoUrl,
       rules,
       social_links: socialLinks,
       isPrivate,
+      is1v1,
+      tournamentFormat,
     };
+
+    let finalLogoUrl = null;
+    if (logoFile) {
+      const fileExt = logoFile.name.split('.').pop();
+      const fileName = `tournament-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from("team-logos") // Reusing team-logos bucket for tournament logos
+        .upload(fileName, logoFile);
+
+      if (uploadError) {
+        setIsSaving(false);
+        return toast.error("Error subiendo el logo: " + uploadError.message);
+      }
+      
+      const { data: { publicUrl } } = supabase.storage.from("team-logos").getPublicUrl(fileName);
+      finalLogoUrl = publicUrl;
+    }
 
     const { data, error } = await supabase
       .from("tournaments")
@@ -77,6 +97,7 @@ export default function CreateTournament() {
           description: tournamentDescription,
           max_teams: Number(maxTeams) || 8,
           template_json,
+          logo_url: finalLogoUrl,
         }
       ])
       .select()
@@ -118,7 +139,14 @@ export default function CreateTournament() {
             </div>
             <div style={{ flex: "1 1 150px" }}>
               <label className="text-sm text-muted font-medium block mb-2">Jugadores por Equipo</label>
-              <input type="number" className="input-base" value={maxPlayers} onChange={e => setMaxPlayers(e.target.value)} min="4" />
+              <input type="number" className="input-base" value={is1v1 ? 1 : maxPlayers} onChange={e => setMaxPlayers(e.target.value)} min={is1v1 ? "1" : "4"} disabled={is1v1} />
+            </div>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Formato de Torneo</label>
+              <select className="input-base" value={tournamentFormat} onChange={e => setTournamentFormat(e.target.value)}>
+                <option value="single_elimination">Eliminación Simple</option>
+                <option value="double_elimination">Doble Eliminación</option>
+              </select>
             </div>
           </div>
           <div>
@@ -126,20 +154,38 @@ export default function CreateTournament() {
             <textarea className="input-base" value={tournamentDescription} onChange={e => setTournamentDescription(e.target.value)} placeholder="Reglas o descripción corta..." style={{ minHeight: "80px" }} />
           </div>
           <div style={{ marginTop: "1.5rem" }}>
-            <label className="text-sm text-muted font-medium block mb-2">URL del Logo (Opcional)</label>
-            <input className="input-base" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://ejemplo.com/logo.png" />
-          </div>
-          <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <input 
-              type="checkbox" 
-              id="private-tournament"
-              checked={isPrivate}
-              onChange={e => setIsPrivate(e.target.checked)}
-              style={{ width: "18px", height: "18px", cursor: "pointer" }}
-            />
-            <label htmlFor="private-tournament" className="text-sm text-main" style={{ cursor: "pointer" }}>
-              Torneo Privado (Oculto en Explorar)
+            <label className="text-sm text-muted font-medium block mb-2">Logo del Torneo (Opcional)</label>
+            <label className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <Plus size={18} />
+              {logoFile ? logoFile.name : "Subir Imagen"}
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setLogoFile(e.target.files[0])} />
             </label>
+          </div>
+          <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input 
+                type="checkbox" 
+                id="private-tournament"
+                checked={isPrivate}
+                onChange={e => setIsPrivate(e.target.checked)}
+                style={{ width: "18px", height: "18px", cursor: "pointer" }}
+              />
+              <label htmlFor="private-tournament" className="text-sm text-main" style={{ cursor: "pointer" }}>
+                Torneo Privado (Oculto en Explorar)
+              </label>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input 
+                type="checkbox" 
+                id="is1v1-tournament"
+                checked={is1v1}
+                onChange={e => setIs1v1(e.target.checked)}
+                style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--primary)" }}
+              />
+              <label htmlFor="is1v1-tournament" className="text-sm text-main" style={{ cursor: "pointer", color: "var(--primary)", fontWeight: "bold" }}>
+                Torneo 1v1 (Individual)
+              </label>
+            </div>
           </div>
         </div>
 

@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { Save, Lock, Unlock, Users, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function EditTournament() {
   const { id } = useParams();
@@ -25,24 +26,35 @@ export default function EditTournament() {
   const [moderators, setModerators] = useState([]);
   
   // Extra Options
+  const [logoFile, setLogoFile] = useState(null);
   const [logoUrl, setLogoUrl] = useState("");
   const [rules, setRules] = useState("");
   const [socialLinks, setSocialLinks] = useState({ twitch: "", twitter: "", youtube: "", discord: "" });
   const [isPrivate, setIsPrivate] = useState(false);
+  const [is1v1, setIs1v1] = useState(false);
+  const [tournamentFormat, setTournamentFormat] = useState("single_elimination");
   
   // New Mod Input
   const [newModId, setNewModId] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [moderatorProfiles, setModeratorProfiles] = useState([]);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/");
-    } else if (status === "authenticated" && id) {
+    if (status !== "loading") {
       fetchData();
     }
   }, [id, status, router]);
+
+  useEffect(() => {
+    if (moderators && moderators.length > 0) {
+      supabase.from("users").select("id, name, image").in("id", moderators)
+        .then(({ data }) => setModeratorProfiles(data || []));
+    } else {
+      setModeratorProfiles([]);
+    }
+  }, [moderators]);
 
   const fetchData = async () => {
     const { data, error } = await supabase.from("tournaments").select("*").eq("id", id).single();
@@ -60,10 +72,12 @@ export default function EditTournament() {
       setModerators(data.moderators || []);
       
       if (data.template_json) {
-        setLogoUrl(data.template_json.logo_url || "");
+        setLogoUrl(data.logo_url || data.template_json.logo_url || "");
         setRules(data.template_json.rules || "");
         setSocialLinks(data.template_json.social_links || { twitch: "", twitter: "", youtube: "", discord: "" });
         setIsPrivate(data.template_json.isPrivate || false);
+        setIs1v1(data.template_json.is1v1 || false);
+        setTournamentFormat(data.template_json.tournamentFormat || "single_elimination");
       }
     }
     setIsLoading(false);
@@ -110,6 +124,27 @@ export default function EditTournament() {
     e.preventDefault();
     setIsSaving(true);
     
+    let finalLogoUrl = logoUrl;
+    if (logoFile) {
+      const fileExt = logoFile.name.split('.').pop();
+      const fileName = `tournament-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("team-logos")
+        .upload(fileName, logoFile);
+
+      if (uploadError) {
+        setIsSaving(false);
+        return toast.error("Error subiendo el logo: " + uploadError.message);
+      }
+      
+      const { data: { publicUrl } } = supabase.storage.from("team-logos").getPublicUrl(fileName);
+      finalLogoUrl = publicUrl;
+    }
+
+    // Limpiamos logo_url de template_json si existía
+    const newTemplateJson = { ...tournament.template_json };
+    delete newTemplateJson.logo_url;
+
     const { error } = await supabase
       .from("tournaments")
       .update({
@@ -118,12 +153,14 @@ export default function EditTournament() {
         max_teams: maxTeams,
         status: tStatus,
         moderators: moderators,
+        logo_url: finalLogoUrl,
         template_json: {
-          ...tournament.template_json,
-          logo_url: logoUrl,
+          ...newTemplateJson,
           rules,
           social_links: socialLinks,
-          isPrivate
+          isPrivate,
+          is1v1,
+          tournamentFormat
         }
       })
       .eq("id", id);
@@ -155,7 +192,7 @@ export default function EditTournament() {
     setShowConfirmDelete(true);
   };
 
-  if (status === "loading" || isLoading) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Cargando...</div>;
+  if (status === "loading" || isLoading) return <LoadingSpinner text="Cargando..." fullHeight={true} />;
   if (!tournament) return null;
 
   return (
@@ -182,21 +219,51 @@ export default function EditTournament() {
               <label className="text-sm text-muted font-medium block mb-2">Límite de Equipos *</label>
               <input type="number" min="2" max="128" required className="input-base" value={maxTeams} onChange={e => setMaxTeams(parseInt(e.target.value))} />
             </div>
-            <div style={{ marginTop: "1.5rem" }}>
-              <label className="text-sm text-muted font-medium block mb-2">URL del Logo (Opcional)</label>
-              <input className="input-base" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://ejemplo.com/logo.png" />
+            <div>
+              <label className="text-sm text-muted font-medium block mb-2">Formato de Torneo</label>
+              <select className="input-base" value={tournamentFormat} onChange={e => setTournamentFormat(e.target.value)}>
+                <option value="single_elimination">Eliminación Simple</option>
+                <option value="double_elimination">Doble Eliminación</option>
+              </select>
             </div>
-            <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <input 
-                type="checkbox" 
-                id="private-tournament"
-                checked={isPrivate}
-                onChange={e => setIsPrivate(e.target.checked)}
-                style={{ width: "18px", height: "18px", cursor: "pointer" }}
-              />
-              <label htmlFor="private-tournament" className="text-sm text-main" style={{ cursor: "pointer" }}>
-                Torneo Privado (Oculto en Explorar)
+            <div style={{ marginTop: "1.5rem" }}>
+              <label className="text-sm text-muted font-medium block mb-2">Logo del Torneo (Opcional)</label>
+              {logoUrl && !logoFile && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <img src={logoUrl} alt="Logo actual" style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "8px" }} />
+                </div>
+              )}
+              <label className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <Users size={18} />
+                {logoFile ? logoFile.name : "Subir Nueva Imagen"}
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setLogoFile(e.target.files[0])} />
               </label>
+            </div>
+            <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <input 
+                  type="checkbox" 
+                  id="private-tournament"
+                  checked={isPrivate}
+                  onChange={e => setIsPrivate(e.target.checked)}
+                  style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                />
+                <label htmlFor="private-tournament" className="text-sm text-main" style={{ cursor: "pointer" }}>
+                  Torneo Privado (Oculto en Explorar)
+                </label>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <input 
+                  type="checkbox" 
+                  id="is1v1-tournament"
+                  checked={is1v1}
+                  onChange={e => setIs1v1(e.target.checked)}
+                  style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--primary)" }}
+                />
+                <label htmlFor="is1v1-tournament" className="text-sm text-main" style={{ cursor: "pointer", color: "var(--primary)", fontWeight: "bold" }}>
+                  Torneo 1v1 (Individual)
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -298,14 +365,29 @@ export default function EditTournament() {
             {moderators.length === 0 ? (
               <p className="text-muted">No hay moderadores añadidos.</p>
             ) : (
-              moderators.map((mod, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem", background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-                  <span style={{ fontFamily: "monospace" }}>{mod}</span>
-                  <button type="button" className="btn-icon btn-danger" onClick={() => handleRemoveModerator(mod)}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))
+              moderators.map((mod, i) => {
+                const profile = moderatorProfiles.find(p => p.id === mod);
+                return (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem", background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                      {profile?.image ? (
+                        <img src={profile.image} alt={profile.name} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                      ) : (
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: "bold" }}>
+                          {profile?.name?.charAt(0) || "?"}
+                        </div>
+                      )}
+                      <div>
+                        <p style={{ margin: 0, fontWeight: "bold" }}>{profile?.name || "Usuario Desconocido"}</p>
+                        <p className="text-muted text-xs" style={{ margin: 0, fontFamily: "monospace" }}>{mod}</p>
+                      </div>
+                    </div>
+                    <button type="button" className="btn-icon btn-danger" onClick={() => handleRemoveModerator(mod)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

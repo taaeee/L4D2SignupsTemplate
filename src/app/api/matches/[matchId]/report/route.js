@@ -14,10 +14,9 @@ export async function POST(req, { params }) {
 
     const { score1, score2, winner_id } = await req.json();
 
-    // Fetch Match and Tournament Info
     const { data: match, error: matchError } = await supabase
       .from("matches")
-      .select("*, tournaments(creator_id, moderators)")
+      .select("*, tournaments(creator_id, moderators, template_json)")
       .eq("id", matchId)
       .single();
 
@@ -33,16 +32,8 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Forbidden: Only creators and moderators can edit scores." }, { status: 403 });
     }
 
-    if (match.status === 'completed') {
-       // We can allow re-editing if needed, but we'd have to handle cascading updates. 
-       // For now, let's allow it but warn if it breaks the tree.
-       // Actually, it's safer to just overwrite, but let's keep it simple.
-    }
-
-    // Determine loser
     const loser_id = winner_id === match.team1_id ? match.team2_id : match.team1_id;
 
-    // Update the match
     const { error: updateError } = await supabase
       .from("matches")
       .update({
@@ -58,24 +49,38 @@ export async function POST(req, { params }) {
       throw updateError;
     }
 
-    // Advance winner to the next match
-    if (match.next_match_id && winner_id) {
-      // Find the next match
+    // Function to advance a team to a target match safely
+    async function advanceTeam(teamId, targetMatchId) {
+      if (!teamId || !targetMatchId) return;
+
       const { data: nextMatch } = await supabase
         .from("matches")
         .select("*")
-        .eq("id", match.next_match_id)
+        .eq("id", targetMatchId)
         .single();
 
       if (nextMatch) {
-        const updateData = {};
-        if (match.match_order % 2 === 0) {
-          updateData.team1_id = winner_id;
-        } else {
-          updateData.team2_id = winner_id;
+        // If the target match is a bye, automatically fast-forward the team as the winner
+        if (nextMatch.is_bye) {
+          await supabase
+            .from("matches")
+            .update({ winner_id: teamId, status: 'completed' })
+            .eq("id", targetMatchId);
+          await advanceTeam(teamId, nextMatch.next_match_id);
+          return;
         }
 
-        // Check if both teams will now be present, make it active
+        const updateData = {};
+        
+        // If it's already in the match, don't do anything (avoid duplicates/overwrites)
+        if (nextMatch.team1_id === teamId || nextMatch.team2_id === teamId) return;
+
+        if (!nextMatch.team1_id) {
+          updateData.team1_id = teamId;
+        } else {
+          updateData.team2_id = teamId;
+        }
+
         if ((updateData.team1_id || nextMatch.team1_id) && (updateData.team2_id || nextMatch.team2_id)) {
           updateData.status = 'active';
         }
@@ -83,11 +88,19 @@ export async function POST(req, { params }) {
         await supabase
           .from("matches")
           .update(updateData)
-          .eq("id", match.next_match_id);
+          .eq("id", targetMatchId);
       }
     }
 
-    // Advance loser if there's a loser bracket (Double Elimination) - ignoring for now as requested Single Elim
+    // Advance Winner
+    if (match.next_match_id && winner_id) {
+      await advanceTeam(winner_id, match.next_match_id);
+    }
+
+    // Advance Loser (Double Elimination)
+    if (match.loser_match_id && loser_id) {
+      await advanceTeam(loser_id, match.loser_match_id);
+    }
 
     return NextResponse.json({ success: true });
 

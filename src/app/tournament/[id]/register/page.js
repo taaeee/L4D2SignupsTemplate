@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Plus, Trash2, Upload, Users, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function RegisterTeam() {
   const { id } = useParams();
@@ -153,7 +154,10 @@ export default function RegisterTeam() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!teamName) return toast.error("El equipo debe tener un nombre.");
+    const is1v1 = tournament?.template_json?.is1v1;
+    const finalTeamName = is1v1 ? players[0]?.name : teamName;
+
+    if (!finalTeamName) return toast.error(is1v1 ? "Debes ingresar tu nombre." : "El equipo debe tener un nombre.");
     for (const p of players) {
       if (!p.name || !p.steam_id_64) return toast.error(`El jugador ${p.name || "(sin nombre)"} debe tener nombre y URL de Steam.`);
     }
@@ -223,7 +227,7 @@ export default function RegisterTeam() {
         .from("teams")
         .insert([{ 
           tournament_id: id, 
-          name: teamName, 
+          name: finalTeamName, 
           logo_url: finalLogo,
           creator_id: session.user.id 
         }])
@@ -256,7 +260,7 @@ export default function RegisterTeam() {
     }
   };
 
-  if (status === "loading" || isLoading) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Cargando...</div>;
+  if (status === "loading" || isLoading) return <LoadingSpinner text="Cargando..." fullHeight={true} />;
   if (!tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Torneo no encontrado.</div>;
 
   const tpl = tournament.template_json;
@@ -264,19 +268,20 @@ export default function RegisterTeam() {
   return (
     <div className="container" style={{ paddingBottom: "4rem" }}>
       <header style={{ marginBottom: "2rem", textAlign: "center" }}>
-        <h1>Registro de Equipo</h1>
+        <h1>{tpl?.is1v1 ? "Registro Individual" : "Registro de Equipo"}</h1>
         <p className="text-muted">Inscribiendo a: {tournament.name}</p>
       </header>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
         {/* TEAM DETAILS */}
+        {!tpl?.is1v1 && (
         <div className="glass-panel" style={{ padding: "2rem" }}>
           <h2 style={{ marginBottom: "1.5rem", color: "var(--primary)" }}>Detalles del Equipo</h2>
           
           <div className="flex-col gap-4">
             <div>
               <label className="text-sm text-muted font-medium block mb-2">Nombre del Equipo *</label>
-              <input required className="input-base" value={teamName} onChange={e => setTeamName(e.target.value)} />
+              <input required={!tpl?.is1v1} className="input-base" value={teamName} onChange={e => setTeamName(e.target.value)} />
             </div>
             
             <div>
@@ -366,12 +371,15 @@ export default function RegisterTeam() {
             ))}
           </div>
         </div>
+        )}
 
         {/* PLAYERS */}
         <div className="glass-panel" style={{ padding: "2rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-            <h2 style={{ color: "var(--primary)", margin: 0 }}>Jugadores ({players.length} / {tpl.maxPlayers || 8})</h2>
-            {players.length < (tpl.maxPlayers || 8) && (
+            <h2 style={{ color: "var(--primary)", margin: 0 }}>
+              {tpl?.is1v1 ? "Tus Datos" : `Jugadores (${players.length} / ${tpl.maxPlayers || 8})`}
+            </h2>
+            {!tpl?.is1v1 && players.length < (tpl.maxPlayers || 8) && (
               <div style={{ display: "flex", gap: "1rem" }}>
                 <button type="button" className="btn btn-secondary" onClick={() => loadFriends(-1)} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <Users size={18} /> Añadir desde Steam
@@ -386,17 +394,19 @@ export default function RegisterTeam() {
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {players.map((player, index) => (
               <div key={player.id} style={{ padding: "1.5rem", background: "rgba(0,0,0,0.2)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", position: "relative" }}>
-                {players.length > 1 && (
+                {!tpl?.is1v1 && players.length > 1 && (
                   <button type="button" className="btn-icon btn-danger" style={{ position: "absolute", top: "1rem", right: "1rem" }} onClick={() => handleRemovePlayer(player.id)}>
                     <Trash2 size={18} />
                   </button>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                   <h3 style={{ fontSize: "1.1rem", margin: 0 }}>
-                    Jugador {index + 1} 
-                    <span className="text-muted text-sm ml-2">
-                      ({index === 0 ? "Captain" : index === 1 ? "Co-Captain" : "Member"})
-                    </span>
+                    {tpl?.is1v1 ? "Información del Jugador" : `Jugador ${index + 1}`} 
+                    {!tpl?.is1v1 && (
+                      <span className="text-muted text-sm ml-2">
+                        ({index === 0 ? "Captain" : index === 1 ? "Co-Captain" : "Member"})
+                      </span>
+                    )}
                   </h3>
                 </div>
                 
@@ -462,7 +472,7 @@ export default function RegisterTeam() {
             
             <div style={{ overflowY: "auto", flex: 1 }}>
               {isFriendsLoading ? (
-                <p style={{ textAlign: "center", padding: "2rem" }}>Cargando amigos...</p>
+                <LoadingSpinner text="Cargando amigos..." size={30} />
               ) : friends.length === 0 ? (
                 <p style={{ textAlign: "center", padding: "2rem", color: "var(--color-error)" }}>
                   No se encontraron amigos. Asegúrate de haber iniciado sesión con Steam y tener tu perfil público.

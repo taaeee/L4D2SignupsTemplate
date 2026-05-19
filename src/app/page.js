@@ -5,6 +5,8 @@ import LoginButton from "@/components/LoginButton";
 import { useSession, signIn } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import ConfirmModal from "@/components/ConfirmModal";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   Copy,
   Link as LinkIcon,
@@ -25,6 +27,9 @@ export default function Home() {
   const [publicTournaments, setPublicTournaments] = useState([]);
   const [myTeams, setMyTeams] = useState([]);
   const [activeTab, setActiveTab] = useState("explorar");
+  const [searchExplore, setSearchExplore] = useState("");
+  const [searchTournaments, setSearchTournaments] = useState("");
+  const [searchRegistrations, setSearchRegistrations] = useState("");
   const [hasSteamLinked, setHasSteamLinked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -124,12 +129,7 @@ export default function Home() {
 
   if (status === "loading" || (session && isLoading)) {
     return (
-      <div
-        className="container"
-        style={{ textAlign: "center", marginTop: "10vh" }}
-      >
-        Cargando...
-      </div>
+      <LoadingSpinner text="Cargando..." fullHeight={true} />
     );
   }
 
@@ -603,9 +603,17 @@ export default function Home() {
                 }}
               >
                 <h2 style={{ margin: 0 }}>Torneos Públicos</h2>
+                <input
+                  type="text"
+                  className="input-base"
+                  placeholder="Buscar torneo público..."
+                  value={searchExplore}
+                  onChange={(e) => setSearchExplore(e.target.value)}
+                  style={{ width: "100%", maxWidth: "300px" }}
+                />
               </div>
 
-              {publicTournaments.length === 0 ? (
+              {publicTournaments.filter(t => t.name.toLowerCase().includes(searchExplore.toLowerCase())).length === 0 ? (
                 <div
                   className="card"
                   style={{ textAlign: "center", padding: "3rem" }}
@@ -623,7 +631,7 @@ export default function Home() {
                       "repeat(auto-fill, minmax(300px, 1fr))",
                   }}
                 >
-                  {publicTournaments.map((t) => (
+                  {publicTournaments.filter(t => t.name.toLowerCase().includes(searchExplore.toLowerCase())).map((t) => (
                     <div
                       key={t.id}
                       className="card"
@@ -718,15 +726,25 @@ export default function Home() {
                 }}
               >
                 <h2 style={{ margin: 0 }}>Mis Torneos</h2>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => router.push("/tournament/create")}
-                >
-                  Crear Nuevo Torneo
-                </button>
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+                  <input
+                    type="text"
+                    className="input-base"
+                    placeholder="Buscar torneo..."
+                    value={searchTournaments}
+                    onChange={(e) => setSearchTournaments(e.target.value)}
+                    style={{ width: "100%", maxWidth: "300px" }}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => router.push("/tournament/create")}
+                  >
+                    Crear Nuevo Torneo
+                  </button>
+                </div>
               </div>
 
-              {tournaments.length === 0 ? (
+              {tournaments.filter(t => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).length === 0 ? (
                 <div
                   className="card"
                   style={{ textAlign: "center", padding: "3rem" }}
@@ -744,7 +762,7 @@ export default function Home() {
                       "repeat(auto-fill, minmax(300px, 1fr))",
                   }}
                 >
-                  {tournaments.map((t) => (
+                  {tournaments.filter(t => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).map((t) => (
                     <div
                       key={t.id}
                       className="card"
@@ -811,9 +829,17 @@ export default function Home() {
                 }}
               >
                 <h2 style={{ margin: 0 }}>Equipos Registrados</h2>
+                <input
+                  type="text"
+                  className="input-base"
+                  placeholder="Buscar por equipo o torneo..."
+                  value={searchRegistrations}
+                  onChange={(e) => setSearchRegistrations(e.target.value)}
+                  style={{ width: "100%", maxWidth: "300px" }}
+                />
               </div>
 
-              {myTeams.length === 0 ? (
+              {myTeams.filter(t => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).length === 0 ? (
                 <div
                   className="card"
                   style={{ textAlign: "center", padding: "3rem" }}
@@ -831,7 +857,7 @@ export default function Home() {
                       "repeat(auto-fill, minmax(300px, 1fr))",
                   }}
                 >
-                  {myTeams.map((team) => {
+                  {myTeams.filter(t => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).map((team) => {
                     const isPending = team.status === "pending";
                     const isAccepted = team.status === "accepted";
                     const isLocked = team.tournaments?.status === "locked";

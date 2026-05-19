@@ -1,9 +1,11 @@
 "use client";
 
 import React, { Suspense } from "react";
+
 import { signIn } from "next-auth/react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSearchParams } from "next/navigation";
 
 function LoginContent() {
@@ -172,7 +174,7 @@ export default function LoginPage() {
           justifyContent: "center",
         }}
       >
-        <Suspense fallback={<div className="card">Cargando opciones...</div>}>
+        <Suspense fallback={<LoadingSpinner text="Cargando opciones..." />}>
           <LoginContent />
         </Suspense>
       </main>

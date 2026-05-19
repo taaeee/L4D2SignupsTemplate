@@ -16,20 +16,27 @@ import {
   MessageSquare,
   FileText,
   X,
+  Link as LinkIcon,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
 import ReactMarkdown from "react-markdown";
 import BracketViewer from "@/components/BracketViewer";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 const generateId = (children) => {
   const extractText = (node) => {
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    if (node && node.props && node.props.children) return extractText(node.props.children);
-    return '';
+    if (typeof node === "string") return node;
+    if (Array.isArray(node)) return node.map(extractText).join("");
+    if (node && node.props && node.props.children)
+      return extractText(node.props.children);
+    return "";
   };
-  return extractText(children).toLowerCase().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
+  return extractText(children)
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w\-]+/g, "");
 };
 
 export default function TournamentDetails() {
@@ -122,6 +129,16 @@ export default function TournamentDetails() {
     setIsLoading(false);
   };
 
+  const refreshMatches = async () => {
+    const { data: matchesData } = await supabase
+      .from("matches")
+      .select("*")
+      .eq("tournament_id", id);
+    if (matchesData) {
+      setMatches(matchesData);
+    }
+  };
+
   const getPlayerBan = (steamId64) => {
     if (!steamId64 || !communityBans[steamId64]) return null;
     return communityBans[steamId64];
@@ -136,14 +153,7 @@ export default function TournamentDetails() {
   };
 
   if (isLoading) {
-    return (
-      <div
-        className="container"
-        style={{ textAlign: "center", marginTop: "10vh" }}
-      >
-        Cargando Torneo...
-      </div>
-    );
+    return <LoadingSpinner text="Cargando Torneo..." fullHeight={true} />;
   }
 
   if (!tournament) {
@@ -176,23 +186,25 @@ export default function TournamentDetails() {
   const isRegistrationFull = teams.length >= 300;
 
   const handleGenerateBracket = async () => {
-    const isRegen = tournament.bracket_status === 'generated' || tournament.bracket_status === 'completed';
-    const msg = isRegen 
-      ? "¿Estás seguro de REGENERAR las llaves? Esto ELIMINARÁ el progreso actual de todas las partidas y mezclará los equipos de nuevo." 
+    const isRegen =
+      tournament.bracket_status === "generated" ||
+      tournament.bracket_status === "completed";
+    const msg = isRegen
+      ? "¿Estás seguro de REGENERAR las llaves? Esto ELIMINARÁ el progreso actual de todas las partidas y mezclará los equipos de nuevo."
       : "¿Estás seguro de generar las llaves? Esto no se puede deshacer y asignará los equipos aleatoriamente.";
-    
+
     if (!confirm(msg)) return;
-    
+
     setIsGeneratingBracket(true);
     try {
       const res = await fetch(`/api/tournament/${id}/bracket/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: isRegen })
+        body: JSON.stringify({ force: isRegen }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
+
       toast.success("Llaves generadas correctamente.");
       fetchData(); // Reload everything
       setActiveTab("bracket");
@@ -241,6 +253,19 @@ export default function TournamentDetails() {
 
   const toggleTeam = (teamId) => {
     setExpandedTeams((prev) => ({ ...prev, [teamId]: !prev[teamId] }));
+  };
+
+  const handleToggleAllTeams = () => {
+    const acceptedTeamsToToggle = teams.filter((t) => t.status === "accepted");
+    const allExpanded =
+      acceptedTeamsToToggle.length > 0 &&
+      acceptedTeamsToToggle.every((t) => expandedTeams[t.id]);
+
+    const newExpanded = { ...expandedTeams };
+    acceptedTeamsToToggle.forEach((t) => {
+      newExpanded[t.id] = !allExpanded;
+    });
+    setExpandedTeams(newExpanded);
   };
 
   // Helper function to render a team card
@@ -326,7 +351,9 @@ export default function TournamentDetails() {
 
           {/* Name & Flags */}
           <div style={{ flex: 1, padding: "1rem 1rem 1rem 0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
               <h3
                 style={{
                   margin: 0,
@@ -338,20 +365,27 @@ export default function TournamentDetails() {
                 {team.name}
               </h3>
               {teamCountries.length > 0 && (
-                <div style={{ display: "flex", gap: "0.3rem", marginLeft: "0.5rem", flexWrap: "wrap" }}>
-                  {teamCountries.map(c => (
-                    <img 
-                      key={c.code} 
-                      src={c.flag} 
-                      alt={c.name} 
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.3rem",
+                    marginLeft: "0.5rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {teamCountries.map((c) => (
+                    <img
+                      key={c.code}
+                      src={c.flag}
+                      alt={c.name}
                       title={c.name}
-                      style={{ 
-                        height: isExpanded ? "20px" : "16px", 
-                        borderRadius: "2px", 
+                      style={{
+                        height: isExpanded ? "20px" : "16px",
+                        borderRadius: "2px",
                         boxShadow: "0 2px 4px rgba(0,0,0,0.5)",
                         transition: "height 0.4s ease",
-                        objectFit: "cover"
-                      }} 
+                        objectFit: "cover",
+                      }}
                     />
                   ))}
                 </div>
@@ -735,9 +769,9 @@ export default function TournamentDetails() {
           gap: "1rem",
         }}
       >
-        {tournament.template_json?.logo_url && (
+        {(tournament.logo_url || tournament.template_json?.logo_url) && (
           <img
-            src={tournament.template_json.logo_url}
+            src={tournament.logo_url || tournament.template_json.logo_url}
             alt={tournament.name}
             style={{
               width: "120px",
@@ -756,6 +790,7 @@ export default function TournamentDetails() {
         >
           {tournament.description}
         </p>
+
 
         {/* Social Links & Rules */}
         <div
@@ -883,6 +918,29 @@ export default function TournamentDetails() {
               <FileText size={18} /> Ver Reglas
             </button>
           )}
+
+          {/* Invite / Share Registration Link */}
+          {!isLocked && !isFull && (
+            <div style={{ marginTop: "0.5rem" }}>
+              <button
+                className="btn btn-primary"
+                style={{
+                  padding: "0.75rem 2rem",
+                  fontSize: "1.1rem",
+                  borderRadius: "var(--radius-full)",
+                  boxShadow: "0 4px 15px rgba(111, 175, 58, 0.4)",
+                }}
+                onClick={() => {
+                  const url = `${window.location.origin}/tournament/${id}/register`;
+                  navigator.clipboard.writeText(url);
+                  toast.success("¡Enlace de inscripción copiado!");
+                }}
+                title="Copia este enlace y envíalo a los equipos para que se inscriban."
+              >
+                <LinkIcon size={20} /> Copiar Enlace de Inscripción
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -928,21 +986,27 @@ export default function TournamentDetails() {
             size={32}
             style={{ color: "var(--primary)", margin: "0 auto 1rem" }}
           />
-          <h3>Equipos Aceptados</h3>
+          <h3>
+            {tournament.template_json?.is1v1
+              ? "Jugadores Aceptados"
+              : "Equipos Aceptados"}
+          </h3>
           <p style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
             {acceptedTeamsAll.length} / {tournament.max_teams}
           </p>
         </div>
-        <div style={{ flex: "1 1 200px", textAlign: "center" }}>
-          <Users
-            size={32}
-            style={{ color: "var(--muted)", margin: "0 auto 1rem" }}
-          />
-          <h3>En Cola (Pendientes)</h3>
-          <p style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-            {pendingTeams.length}
-          </p>
-        </div>
+        {(canManage || !isLocked) && (
+          <div style={{ flex: "1 1 200px", textAlign: "center" }}>
+            <Users
+              size={32}
+              style={{ color: "var(--muted)", margin: "0 auto 1rem" }}
+            />
+            <h3>En Cola (Pendientes)</h3>
+            <p style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
+              {pendingTeams.length}
+            </p>
+          </div>
+        )}
         {isCreator && (
           <div style={{ flex: "1 1 200px", textAlign: "center" }}>
             <Download
@@ -970,160 +1034,240 @@ export default function TournamentDetails() {
 
       <main>
         {/* TABS */}
-        <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", borderBottom: "1px solid var(--border-light)", paddingBottom: "0.5rem" }}>
-          <button 
-            className={`btn ${activeTab === 'teams' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: "8px", background: activeTab === 'teams' ? 'var(--primary)' : 'transparent' }}
-            onClick={() => setActiveTab('teams')}
+        <div
+          style={{
+            display: "flex",
+            gap: "1rem",
+            marginBottom: "2rem",
+            borderBottom: "1px solid var(--border-light)",
+            paddingBottom: "0.5rem",
+            overflowX: "auto",
+          }}
+        >
+          <button
+            className={`btn ${
+              activeTab === "teams" ? "btn-primary" : "btn-secondary text-muted"
+            }`}
+            style={{ borderRadius: "8px", border: "none" }}
+            onClick={() => setActiveTab("teams")}
           >
-            Equipos Inscritos
+            {tournament.template_json?.is1v1
+              ? "Jugadores Inscritos"
+              : "Equipos Inscritos"}
           </button>
-          <button 
-            className={`btn ${activeTab === 'bracket' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: "8px", background: activeTab === 'bracket' ? 'var(--primary)' : 'transparent' }}
-            onClick={() => setActiveTab('bracket')}
+          {(canManage || !isLocked) && (
+            <button
+              className={`btn ${
+                activeTab === "pending"
+                  ? "btn-primary"
+                  : "btn-secondary text-muted"
+              }`}
+              style={{ borderRadius: "8px", border: "none" }}
+              onClick={() => setActiveTab("pending")}
+            >
+              Pendientes ({pendingTeams.length})
+            </button>
+          )}
+          <button
+            className={`btn ${
+              activeTab === "bracket"
+                ? "btn-primary"
+                : "btn-secondary text-muted"
+            }`}
+            style={{ borderRadius: "8px", border: "none" }}
+            onClick={() => setActiveTab("bracket")}
           >
             Llaves (Bracket)
           </button>
         </div>
 
-        {activeTab === 'bracket' && (
+        {activeTab === "bracket" && (
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-              <h2 style={{ margin: 0, color: "var(--primary)" }}>Llaves del Torneo</h2>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "2rem",
+              }}
+            >
+              <h2 style={{ margin: 0, color: "var(--primary)" }}>
+                Llaves del Torneo
+              </h2>
               {canManage && (
-                <button 
-                  className="btn btn-primary" 
+                <button
+                  className="btn btn-primary"
                   onClick={handleGenerateBracket}
                   disabled={isGeneratingBracket || acceptedTeamsAll.length < 2}
-                  style={{ background: tournament.bracket_status === 'generated' ? 'var(--warning)' : 'var(--primary)', color: '#000' }}
+                  style={{
+                    background:
+                      tournament.bracket_status === "generated"
+                        ? "var(--warning)"
+                        : "var(--primary)",
+                    color: "#000",
+                  }}
                 >
-                  {isGeneratingBracket ? "Generando..." : (tournament.bracket_status === 'generated' || tournament.bracket_status === 'completed' ? "Regenerar Llaves" : "Generar Llaves")}
+                  {isGeneratingBracket
+                    ? "Generando..."
+                    : tournament.bracket_status === "generated" ||
+                      tournament.bracket_status === "completed"
+                    ? "Regenerar Llaves"
+                    : "Generar Llaves"}
                 </button>
               )}
             </div>
-            
-            {(tournament.bracket_status === 'generated' || tournament.bracket_status === 'completed') ? (
-               <BracketViewer 
-                 matches={matches} 
-                 teams={acceptedTeamsAll} 
-                 canManage={canManage} 
-                 onMatchUpdated={fetchData} 
-               />
+
+            {tournament.bracket_status === "generated" ||
+            tournament.bracket_status === "completed" ? (
+              <BracketViewer
+                matches={matches}
+                teams={acceptedTeamsAll}
+                canManage={canManage}
+                onMatchUpdated={refreshMatches}
+              />
             ) : (
-              <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
-                <p className="text-muted">Las llaves aún no han sido generadas.</p>
+              <div
+                className="card"
+                style={{ textAlign: "center", padding: "3rem" }}
+              >
+                <p className="text-muted">
+                  Las llaves aún no han sido generadas.
+                </p>
               </div>
             )}
           </div>
         )}
 
-        {activeTab === 'teams' && (
+        {activeTab === "teams" && (
           <>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "2rem",
-            flexWrap: "wrap",
-            gap: "1rem",
-          }}
-        >
-          <input
-            type="text"
-            className="input-base"
-            placeholder="Buscar equipo por nombre..."
-            value={teamsSearch}
-            onChange={(e) => setTeamsSearch(e.target.value)}
-            style={{ width: "100%", maxWidth: "400px" }}
-          />
-          {!isRegistrationFull && !isLocked && (
-            <button
-              className="btn btn-primary"
-              onClick={() => router.push(`/tournament/${id}/register`)}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "2rem",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
             >
-              Registrar mi Equipo
-            </button>
-          )}
-        </div>
+              <input
+                type="text"
+                className="input-base"
+                placeholder={
+                  tournament.template_json?.is1v1
+                    ? "Buscar jugador por nombre..."
+                    : "Buscar equipo por nombre..."
+                }
+                value={teamsSearch}
+                onChange={(e) => setTeamsSearch(e.target.value)}
+                style={{ width: "100%", maxWidth: "400px" }}
+              />
+              {!isRegistrationFull && !isLocked && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => router.push(`/tournament/${id}/register`)}
+                >
+                  {tournament.template_json?.is1v1
+                    ? "Registrarme"
+                    : "Registrar mi Equipo"}
+                </button>
+              )}
+            </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "2rem",
-          }}
-        >
-          <h2 style={{ margin: 0, color: "var(--success)" }}>
-            Equipos Aceptados
-          </h2>
-        </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "2rem",
+              }}
+            >
+              <h2 style={{ margin: 0, color: "var(--success)" }}>
+                {tournament.template_json?.is1v1
+                  ? "Jugadores Aceptados"
+                  : "Equipos Aceptados"}
+              </h2>
+              {acceptedTeams.length > 0 && (
+                <button
+                  className="btn btn-secondary text-sm"
+                  onClick={handleToggleAllTeams}
+                >
+                  {acceptedTeams.every((t) => expandedTeams[t.id])
+                    ? "Contraer Todos"
+                    : "Expandir Todos"}
+                </button>
+              )}
+            </div>
 
-        {acceptedTeams.length === 0 ? (
-          <div
-            className="card"
-            style={{
-              textAlign: "center",
-              padding: "3rem",
-              marginBottom: "3rem",
-            }}
-          >
-            <p className="text-muted">
-              Aún no hay equipos aceptados en este torneo.
-            </p>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-              marginBottom: "3rem",
-            }}
-          >
-            {acceptedTeams.map((team) => renderTeamCard(team))}
-          </div>
+            {acceptedTeams.length === 0 ? (
+              <div
+                className="card"
+                style={{
+                  textAlign: "center",
+                  padding: "3rem",
+                  marginBottom: "3rem",
+                }}
+              >
+                <p className="text-muted">
+                  Aún no hay equipos aceptados en este torneo.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                  marginBottom: "3rem",
+                }}
+              >
+                {acceptedTeams.map((team) => renderTeamCard(team))}
+              </div>
+            )}
+          </>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "2rem",
-          }}
-        >
-          <h2 style={{ margin: 0, color: "var(--warning)" }}>
-            Registros (Pendientes)
-          </h2>
-        </div>
+        {activeTab === "pending" && (canManage || !isLocked) && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "2rem",
+              }}
+            >
+              <h2 style={{ margin: 0, color: "var(--warning)" }}>
+                Registros (Pendientes)
+              </h2>
+            </div>
 
-        {pendingTeams.length === 0 ? (
-          <div
-            className="card"
-            style={{
-              textAlign: "center",
-              padding: "3rem",
-              marginBottom: "3rem",
-            }}
-          >
-            <p className="text-muted">No hay equipos en cola de revisión.</p>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-              marginBottom: "3rem",
-            }}
-          >
-            {pendingTeams.map((team) => renderTeamCard(team))}
-          </div>
-        )}
-        </>
+            {pendingTeams.length === 0 ? (
+              <div
+                className="card"
+                style={{
+                  textAlign: "center",
+                  padding: "3rem",
+                  marginBottom: "3rem",
+                }}
+              >
+                <p className="text-muted">
+                  No hay equipos en cola de revisión.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                  marginBottom: "3rem",
+                }}
+              >
+                {pendingTeams.map((team) => renderTeamCard(team))}
+              </div>
+            )}
+          </>
         )}
       </main>
 
@@ -1208,28 +1352,44 @@ export default function TournamentDetails() {
                 <div className="markdown-container">
                   <ReactMarkdown
                     components={{
-                      h1: ({ node, ...props }) => <h1 id={generateId(props.children)} {...props} />,
-                      h2: ({ node, ...props }) => <h2 id={generateId(props.children)} {...props} />,
-                      h3: ({ node, ...props }) => <h3 id={generateId(props.children)} {...props} />,
+                      h1: ({ node, ...props }) => (
+                        <h1 id={generateId(props.children)} {...props} />
+                      ),
+                      h2: ({ node, ...props }) => (
+                        <h2 id={generateId(props.children)} {...props} />
+                      ),
+                      h3: ({ node, ...props }) => (
+                        <h3 id={generateId(props.children)} {...props} />
+                      ),
                       a: ({ node, href, ...props }) => {
-                        if (href && href.startsWith('#')) {
+                        if (href && href.startsWith("#")) {
                           return (
                             <a
                               href={href}
                               onClick={(e) => {
                                 e.preventDefault();
-                                const targetId = href.replace('#', '');
-                                const element = document.getElementById(targetId);
+                                const targetId = href.replace("#", "");
+                                const element =
+                                  document.getElementById(targetId);
                                 if (element) {
-                                  element.scrollIntoView({ behavior: 'smooth' });
+                                  element.scrollIntoView({
+                                    behavior: "smooth",
+                                  });
                                 }
                               }}
                               {...props}
                             />
                           );
                         }
-                        return <a href={href} target="_blank" rel="noreferrer" {...props} />;
-                      }
+                        return (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            {...props}
+                          />
+                        );
+                      },
                     }}
                   >
                     {tournament.template_json.rules}
@@ -1254,7 +1414,9 @@ export default function TournamentDetails() {
                 opacity: 0.9,
               }}
               onClick={() => {
-                const scrollContainer = document.getElementById("rules-scroll-container");
+                const scrollContainer = document.getElementById(
+                  "rules-scroll-container"
+                );
                 if (scrollContainer) {
                   scrollContainer.scrollTo({ top: 0, behavior: "smooth" });
                 }

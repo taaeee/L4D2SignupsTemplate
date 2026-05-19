@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ShieldCheck, LogIn, AlertCircle } from "lucide-react";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function ModInvitePage() {
   const { token } = useParams();
@@ -43,7 +44,7 @@ export default function ModInvitePage() {
   };
 
   if (status === "loading") {
-    return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Cargando...</div>;
+    return <LoadingSpinner text="Cargando..." fullHeight={true} />;
   }
 
   return (

@@ -3,12 +3,13 @@
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { LogIn } from "lucide-react";
+import LoadingSpinner from "./LoadingSpinner";
 
 export default function LoginButton() {
   const { data: session, status } = useSession();
 
   if (status === "loading") {
-    return <button className="btn btn-secondary" disabled>Cargando...</button>;
+    return <button className="btn btn-secondary" disabled style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><LoadingSpinner size={16} text="" inline={true} /> Cargando...</button>;
   }
 
   if (session) {

@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { Trash2, Save, Users, Plus, X, ExternalLink, Upload } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function TeamDetails() {
   const { id: tournamentId, teamId } = useParams();
@@ -356,7 +357,7 @@ export default function TeamDetails() {
     }
   };
 
-  if (isLoading) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Cargando equipo...</div>;
+  if (isLoading) return <LoadingSpinner text="Cargando equipo..." fullHeight={true} />;
   if (!team || !tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>No encontrado.</div>;
 
   return (
@@ -592,7 +593,7 @@ export default function TeamDetails() {
             </div>
             <div style={{ overflowY: "auto", flex: 1 }}>
               {isFriendsLoading ? (
-                <p style={{ textAlign: "center", padding: "2rem" }}>Cargando amigos...</p>
+                <LoadingSpinner text="Cargando amigos..." size={30} />
               ) : friends.length === 0 ? (
                 <p style={{ textAlign: "center", padding: "2rem", color: "var(--color-error)" }}>
                   No se encontraron amigos. Inicia sesión con Steam.

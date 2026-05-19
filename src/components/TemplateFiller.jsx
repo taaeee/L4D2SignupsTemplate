@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Copy, Check, Users, Shield, Send, Plus, Trash2, LogOut, X, Search } from "lucide-react";
+import LoadingSpinner from "./LoadingSpinner";
 
 export default function TemplateFiller({ template }) {
   const [customValues, setCustomValues] = useState({});
@@ -394,7 +395,7 @@ export default function TemplateFiller({ template }) {
           disabled={loading || players.length === 0}
           style={{ padding: '1rem 3rem', fontSize: '1.1rem' }}
         >
-          {loading ? "Processing..." : <><Send size={20} /> Generate Registration</>}
+          {loading ? <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><LoadingSpinner size={20} text="" inline={true} /> Processing...</div> : <><Send size={20} /> Generate Registration</>}
         </button>
       </div>
       
@@ -449,7 +450,7 @@ export default function TemplateFiller({ template }) {
             </div>
             <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
               {isLoadingFriends ? (
-                <div style={{ textAlign: 'center', padding: '2rem' }}>Loading friends...</div>
+                <LoadingSpinner text="Loading friends..." fullHeight={true} />
               ) : friends.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem' }}>No friends found or failed to load.</div>
               ) : filteredFriends.length === 0 ? (
