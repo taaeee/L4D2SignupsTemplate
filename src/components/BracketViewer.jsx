@@ -215,7 +215,7 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
               <div key={`round-${roundIndex}`} style={{
                 display: 'flex',
                 flexDirection: 'column',
-                width: '220px',
+                width: '250px',
                 position: 'relative'
               }}>
                 <h3 style={{ 

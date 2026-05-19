@@ -514,77 +514,22 @@ export default function Home() {
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginBottom: "3rem",
-              borderBottom: "1px solid var(--border-light)",
-              flexWrap: "wrap",
-            }}
-          >
+          <div className="tab-container">
             <button
               onClick={() => setActiveTab("explorar")}
-              style={{
-                background: "none",
-                border: "none",
-                padding: "1rem 2rem",
-                fontSize: "1.1rem",
-                color:
-                  activeTab === "explorar" ? "var(--primary)" : "var(--muted)",
-                borderBottom:
-                  activeTab === "explorar"
-                    ? "2px solid var(--primary)"
-                    : "2px solid transparent",
-                cursor: "pointer",
-                fontWeight: "bold",
-                transition: "all 0.2s ease",
-                outline: "none",
-              }}
+              className={`tab-btn ${activeTab === "explorar" ? "active" : ""}`}
             >
               Explorar Torneos
             </button>
             <button
               onClick={() => setActiveTab("torneos")}
-              style={{
-                background: "none",
-                border: "none",
-                padding: "1rem 2rem",
-                fontSize: "1.1rem",
-                color:
-                  activeTab === "torneos" ? "var(--primary)" : "var(--muted)",
-                borderBottom:
-                  activeTab === "torneos"
-                    ? "2px solid var(--primary)"
-                    : "2px solid transparent",
-                cursor: "pointer",
-                fontWeight: "bold",
-                transition: "all 0.2s ease",
-                outline: "none",
-              }}
+              className={`tab-btn ${activeTab === "torneos" ? "active" : ""}`}
             >
               Mis Torneos
             </button>
             <button
               onClick={() => setActiveTab("inscripciones")}
-              style={{
-                background: "none",
-                border: "none",
-                padding: "1rem 2rem",
-                fontSize: "1.1rem",
-                color:
-                  activeTab === "inscripciones"
-                    ? "var(--primary)"
-                    : "var(--muted)",
-                borderBottom:
-                  activeTab === "inscripciones"
-                    ? "2px solid var(--primary)"
-                    : "2px solid transparent",
-                cursor: "pointer",
-                fontWeight: "bold",
-                transition: "all 0.2s ease",
-                outline: "none",
-              }}
+              className={`tab-btn ${activeTab === "inscripciones" ? "active" : ""}`}
             >
               Mis Inscripciones
             </button>

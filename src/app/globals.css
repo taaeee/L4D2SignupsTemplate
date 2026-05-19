@@ -335,3 +335,40 @@ button {
   background: transparent;
   padding: 0;
 }
+
+/* Bracket Hover Effects */
+.hover-highlight {
+  background: rgba(142, 219, 77, 0.15) !important;
+}
+.hover-card-highlight {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 12px rgba(142, 219, 77, 0.4) !important;
+}
+
+/* Tabs */
+.tab-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  outline: none;
+}
+.tab-btn:hover {
+  color: #fff;
+}
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom: 2px solid var(--primary);
+}

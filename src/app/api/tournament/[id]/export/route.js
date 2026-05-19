@@ -56,7 +56,16 @@ export async function GET(request, { params }) {
       const endRow = currentRow + numMembers - 1;
 
       const tName = team.name || "";
-      const tLogoUrl = team.logo_url || "";
+      let tLogoUrl = team.logo_url || "";
+      if (tLogoUrl.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(tLogoUrl);
+          tLogoUrl = parsed.url || "";
+        } catch (e) {
+          console.warn("Could not parse logo_url JSON for team", tName);
+        }
+      }
+      
       const tDate = new Date(team.created_at).toLocaleString();
 
       if (!team.team_members || team.team_members.length === 0) {
