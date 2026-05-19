@@ -84,7 +84,7 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
     const num = matchNumbers[m.id];
     if (m.next_match_id) {
       if (!feeders[m.next_match_id]) feeders[m.next_match_id] = [];
-      feeders[m.next_match_id].push({ id: m.id, type: 'winner', label: num ? `Ganador de M${num}` : `Ganador anterior`, isBye: m.is_bye });
+      feeders[m.next_match_id].push({ id: m.id, type: 'winner', label: null, isBye: m.is_bye });
     }
     if (m.loser_match_id) {
       if (!feeders[m.loser_match_id]) feeders[m.loser_match_id] = [];

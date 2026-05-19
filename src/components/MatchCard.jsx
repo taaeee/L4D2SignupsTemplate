@@ -73,11 +73,12 @@ export default function MatchCard({ match, teamMap, canManage, onClick, matchNum
         minHeight: '36px',
         transition: 'background 0.2s ease'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', flex: 1, paddingRight: '8px' }}>
-          {match.winner_id === match.team1_id && <Trophy size={14} color="var(--success)" />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingRight: '8px' }}>
+          {match.winner_id === match.team1_id && <Trophy size={14} color="var(--success)" style={{ flexShrink: 0 }} />}
           <span style={{ 
             ...getTeamStyle(match.team1_id),
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.9rem' 
+            fontSize: '0.9rem',
+            wordBreak: 'break-word'
           }}>
             {renderTeamName(match.team1_id, team1, 1)}
           </span>
@@ -99,11 +100,12 @@ export default function MatchCard({ match, teamMap, canManage, onClick, matchNum
         minHeight: '36px',
         transition: 'background 0.2s ease'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', flex: 1, paddingRight: '8px' }}>
-          {match.winner_id === match.team2_id && <Trophy size={14} color="var(--success)" />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingRight: '8px' }}>
+          {match.winner_id === match.team2_id && <Trophy size={14} color="var(--success)" style={{ flexShrink: 0 }} />}
           <span style={{ 
             ...getTeamStyle(match.team2_id),
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.9rem' 
+            fontSize: '0.9rem',
+            wordBreak: 'break-word'
           }}>
             {renderTeamName(match.team2_id, team2, 2)}
           </span>

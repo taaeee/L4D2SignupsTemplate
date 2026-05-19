@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trophy } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function ScoreModal({ match, team1, team2, onClose, onSave, isSaving }) {
   const [score1, setScore1] = useState(match.score1 || 0);
@@ -19,7 +20,7 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
 
   const handleSave = () => {
     if (!winnerId) {
-      alert("Por favor selecciona un ganador. Si hay empate, debes decidir quién avanza.");
+      toast.error("Por favor selecciona un ganador. Si hay empate, debes decidir quién avanza.");
       return;
     }
     onSave({ score1, score2, winner_id: winnerId });

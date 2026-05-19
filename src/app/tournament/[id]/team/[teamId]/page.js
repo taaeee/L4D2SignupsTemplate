@@ -33,6 +33,7 @@ export default function TeamDetails() {
   const [tempLogoFile, setTempLogoFile] = useState(null);
   
   const [teamTag, setTeamTag] = useState("");
+  const [teamName, setTeamName] = useState("");
   const [teamCountries, setTeamCountries] = useState([]);
   const [availableCountries, setAvailableCountries] = useState([]);
   const [countrySearch, setCountrySearch] = useState("");
@@ -94,6 +95,7 @@ export default function TeamDetails() {
 
       setTournament(tData);
       setTeam({ name: teamData.name, logo_url: parsedLogo, raw_logo_url: teamData.logo_url, creator_id: teamData.creator_id });
+      setTeamName(teamData.name);
       setTeamTag(initTag);
       setTeamCountries(initCountries);
       setPlayers(membersData || []);
@@ -192,6 +194,13 @@ export default function TeamDetails() {
     if (!(await checkPermissionToEdit())) return;
     setIsSaving(true);
     await supabase.from("team_members").update({ name: player.name }).eq("id", player.id);
+    
+    // Sync team name if 1v1
+    if (tournament?.template_json?.is1v1) {
+      await supabase.from("teams").update({ name: player.name }).eq("id", teamId);
+      setTeam(prev => ({ ...prev, name: player.name }));
+    }
+
     toast.success("Jugador actualizado.");
     setIsSaving(false);
   };
@@ -246,10 +255,10 @@ export default function TeamDetails() {
         });
       }
 
-      const { error } = await supabase.from("teams").update({ logo_url: finalLogoString }).eq("id", teamId);
+      const { error } = await supabase.from("teams").update({ logo_url: finalLogoString, name: teamName }).eq("id", teamId);
       if (error) throw new Error("Error actualizando la base de datos.");
 
-      setTeam({ ...team, logo_url: finalUrl, raw_logo_url: finalLogoString });
+      setTeam({ ...team, logo_url: finalUrl, raw_logo_url: finalLogoString, name: teamName });
       toast.success("Información del equipo actualizada con éxito.");
       setIsEditingInfo(false);
       setTempLogoFile(null);
@@ -309,6 +318,12 @@ export default function TeamDetails() {
 
       if (error) throw new Error("Error guardando el jugador.");
 
+      // Sync team name if 1v1
+      if (tournament?.template_json?.is1v1) {
+        await supabase.from("teams").update({ name: friend.name }).eq("id", teamId);
+        setTeam(prev => ({ ...prev, name: friend.name }));
+      }
+
       setPlayers([...players, data]);
       toast.success("Amigo añadido con éxito.");
     } catch (err) {
@@ -346,6 +361,12 @@ export default function TeamDetails() {
       }]).select().single();
 
       if (error) throw new Error("Error guardando el jugador.");
+
+      // Sync team name if 1v1
+      if (tournament?.template_json?.is1v1) {
+        await supabase.from("teams").update({ name: newPlayer.name }).eq("id", teamId);
+        setTeam(prev => ({ ...prev, name: newPlayer.name }));
+      }
 
       setPlayers([...players, data]);
       setNewPlayer({ name: "", steam_id_64: "" });
@@ -388,6 +409,13 @@ export default function TeamDetails() {
                 </label>
               </div>
             </div>
+
+            {!tournament?.template_json?.is1v1 && (
+              <div>
+                <label className="text-sm text-muted block mb-1">Nombre del Equipo</label>
+                <input className="input-base" value={teamName} onChange={e => setTeamName(e.target.value)} placeholder="Nombre del Equipo" />
+              </div>
+            )}
 
             <div>
               <label className="text-sm text-muted block mb-1">Tag del Equipo</label>

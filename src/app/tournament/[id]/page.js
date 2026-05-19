@@ -54,6 +54,7 @@ export default function TournamentDetails() {
   const [isGeneratingBracket, setIsGeneratingBracket] = useState(false);
 
   const [teamToDelete, setTeamToDelete] = useState(null);
+  const [bracketConfirmModal, setBracketConfirmModal] = useState({ isOpen: false, isRegen: false });
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [communityBans, setCommunityBans] = useState([]);
 
@@ -185,22 +186,24 @@ export default function TournamentDetails() {
   const isFull = acceptedTeamsAll.length >= tournament.max_teams;
   const isRegistrationFull = teams.length >= 300;
 
-  const handleGenerateBracket = async () => {
+  const handleGenerateBracketClick = () => {
+    if (acceptedTeamsAll.length % 2 !== 0) {
+      return toast.error("El número de equipos aceptados debe ser par para generar las llaves.");
+    }
     const isRegen =
       tournament.bracket_status === "generated" ||
       tournament.bracket_status === "completed";
-    const msg = isRegen
-      ? "¿Estás seguro de REGENERAR las llaves? Esto ELIMINARÁ el progreso actual de todas las partidas y mezclará los equipos de nuevo."
-      : "¿Estás seguro de generar las llaves? Esto no se puede deshacer y asignará los equipos aleatoriamente.";
+    setBracketConfirmModal({ isOpen: true, isRegen });
+  };
 
-    if (!confirm(msg)) return;
-
+  const executeGenerateBracket = async () => {
+    setBracketConfirmModal({ isOpen: false, isRegen: false });
     setIsGeneratingBracket(true);
     try {
       const res = await fetch(`/api/tournament/${id}/bracket/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: isRegen }),
+        body: JSON.stringify({ force: bracketConfirmModal.isRegen }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -225,22 +228,48 @@ export default function TournamentDetails() {
       .from("teams")
       .update({ status: "accepted" })
       .eq("id", teamId);
+
     if (!error) {
-      setTeams(
-        teams.map((t) => (t.id === teamId ? { ...t, status: "accepted" } : t))
-      );
+      let insertedIntoBracket = false;
+      if (tournament.bracket_status === "generated" || tournament.bracket_status === "completed") {
+        const res = await fetch(`/api/tournament/${id}/bracket/sync-team`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "insert", teamId })
+        });
+        const data = await res.json();
+        insertedIntoBracket = data.inserted;
+      }
+
+      if (insertedIntoBracket) {
+        toast.success("Equipo aceptado e insertado automáticamente en una ranura vacía del bracket.");
+      } else {
+        toast.success("Equipo aceptado correctamente.");
+      }
+      
+      fetchData(); // Reload everything to update UI immediately
     }
   };
 
   const executeDeleteTeam = async () => {
     if (!teamToDelete) return;
+
+    // 1. Clean from bracket to avoid ghostly data (via Admin API to bypass RLS)
+    await fetch(`/api/tournament/${id}/bracket/sync-team`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remove", teamId: teamToDelete })
+    });
+
+    // 2. Delete team
     const { error } = await supabase
       .from("teams")
       .delete()
       .eq("id", teamToDelete);
+      
     if (!error) {
-      setTeams(teams.filter((t) => t.id !== teamToDelete));
       toast.success("Equipo eliminado correctamente.");
+      fetchData(); // Reload teams and matches to update bracket
     } else {
       toast.error("Error al eliminar el equipo.");
     }
@@ -1097,7 +1126,7 @@ export default function TournamentDetails() {
               {canManage && (
                 <button
                   className="btn btn-primary"
-                  onClick={handleGenerateBracket}
+                  onClick={handleGenerateBracketClick}
                   disabled={isGeneratingBracket || acceptedTeamsAll.length < 2}
                   style={{
                     background:
@@ -1279,6 +1308,20 @@ export default function TournamentDetails() {
         isDanger={true}
         onConfirm={executeDeleteTeam}
         onCancel={() => setTeamToDelete(null)}
+      />
+
+      <ConfirmModal
+        isOpen={bracketConfirmModal.isOpen}
+        title={bracketConfirmModal.isRegen ? "Regenerar Llaves" : "Generar Llaves"}
+        message={
+          bracketConfirmModal.isRegen
+            ? "¿Estás seguro de REGENERAR las llaves? Esto ELIMINARÁ el progreso actual de todas las partidas y mezclará los equipos de nuevo."
+            : "¿Estás seguro de generar las llaves? Esto no se puede deshacer y asignará los equipos aleatoriamente."
+        }
+        confirmText={bracketConfirmModal.isRegen ? "Sí, Regenerar" : "Sí, Generar"}
+        isDanger={bracketConfirmModal.isRegen}
+        onConfirm={executeGenerateBracket}
+        onCancel={() => setBracketConfirmModal({ isOpen: false, isRegen: false })}
       />
 
       {/* Rules Modal */}

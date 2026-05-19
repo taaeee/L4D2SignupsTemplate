@@ -53,6 +53,10 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Not enough teams to generate bracket (minimum 2)" }, { status: 400 });
     }
 
+    if (teams.length % 2 !== 0) {
+      return NextResponse.json({ error: "The number of teams must be even to generate the bracket." }, { status: 400 });
+    }
+
     const format = tournament.template_json?.tournamentFormat || 'single_elimination';
     const isDoubleElimination = format === 'double_elimination';
 
