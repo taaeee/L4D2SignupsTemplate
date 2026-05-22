@@ -948,9 +948,26 @@ export default function TournamentDetails() {
             </button>
           )}
 
-          {/* Invite / Share Registration Link */}
-          {!isLocked && !isFull && (
-            <div style={{ marginTop: "0.5rem" }}>
+          {/* Invite / Share Links */}
+          <div style={{ marginTop: "0.5rem", display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center" }}>
+            <button
+              className="btn btn-secondary"
+              style={{
+                padding: "0.75rem 2rem",
+                fontSize: "1.1rem",
+                borderRadius: "var(--radius-full)",
+              }}
+              onClick={() => {
+                const url = `${window.location.origin}/tournament/${id}`;
+                navigator.clipboard.writeText(url);
+                toast.success("¡Enlace del torneo copiado!");
+              }}
+              title="Copia este enlace para compartir el torneo."
+            >
+              <LinkIcon size={20} /> Copiar Enlace del Torneo
+            </button>
+            
+            {!isLocked && !isRegistrationFull && (
               <button
                 className="btn btn-primary"
                 style={{
@@ -964,12 +981,12 @@ export default function TournamentDetails() {
                   navigator.clipboard.writeText(url);
                   toast.success("¡Enlace de inscripción copiado!");
                 }}
-                title="Copia este enlace y envíalo a los equipos para que se inscriban."
+                title="Copia este enlace y envíalo para que se inscriban."
               >
                 <LinkIcon size={20} /> Copiar Enlace de Inscripción
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </header>
 

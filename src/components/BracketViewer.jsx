@@ -231,15 +231,15 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
                 {canManage ? (
                   <input 
                     type="text" 
-                    value={roundMetas[`${title}-${roundIndex}`] || ''}
+                    value={roundMetas[`${title}-${roundIndex}`] !== undefined ? roundMetas[`${title}-${roundIndex}`] : '1 Map'}
                     onChange={e => setRoundMetas({...roundMetas, [`${title}-${roundIndex}`]: e.target.value})}
                     onBlur={() => handleMetaBlur(`${title}-${roundIndex}`)}
-                    placeholder="Formato (Ej. BO3)"
+                    placeholder="1 Map"
                     style={{ background: 'transparent', border: 'none', color: 'var(--primary)', textAlign: 'center', width: '100%', fontSize: '0.8rem', marginBottom: '1rem', outline: 'none' }}
                   />
                 ) : (
                   <div style={{ textAlign: 'center', color: 'var(--primary)', fontSize: '0.8rem', marginBottom: '1rem', minHeight: '1.2rem' }}>
-                    {roundMetas[`${title}-${roundIndex}`] || ''}
+                    {roundMetas[`${title}-${roundIndex}`] || '1 Map'}
                   </div>
                 )}
                 
