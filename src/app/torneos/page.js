@@ -98,7 +98,7 @@ export default function TorneosDashboard() {
     // Fetch User's Teams
     const { data: teamsData, error: error3 } = await supabase
       .from("teams")
-      .select("*, tournaments(name, status)")
+      .select("*, tournaments(name, status, logo_url, template_json)")
       .eq("creator_id", session.user.id)
       .order("created_at", { ascending: false });
 
@@ -168,515 +168,558 @@ export default function TorneosDashboard() {
       </header>
 
       <main style={{ flex: 1 }}>
-          {/* User Profile Card */}
-          <div
-            className="card"
-            style={{
-              marginBottom: "3rem",
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "1rem",
-            }}
-          >
-            <div>
-              <h2 style={{ margin: "0 0 0.5rem 0" }}>
-                Hola, {session.user.name}
-              </h2>
+        {/* User Profile Card */}
+        <div
+          className="card"
+          style={{
+            marginBottom: "3rem",
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "1rem",
+          }}
+        >
+          <div>
+            <h2 style={{ margin: "0 0 0.5rem 0" }}>
+              Hola, {session.user.name}
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <span className="text-muted">
+                Tu ID de usuario:
+              </span>
+              <code
+                style={{
+                  background: "rgba(0,0,0,0.2)",
+                  padding: "0.2rem 0.5rem",
+                  borderRadius: "4px",
+                }}
+              >
+                {session.user.id}
+              </code>
+              <button
+                className="btn-icon"
+                onClick={copyToClipboard}
+                title="Copiar ID"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div>
+            {hasSteamLinked ? (
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
-                  flexWrap: "wrap",
+                  color: "var(--success)",
                 }}
               >
-                <span className="text-muted">
-                  Tu ID de usuario (para invitaciones de moderador):
-                </span>
-                <code
-                  style={{
-                    background: "rgba(0,0,0,0.2)",
-                    padding: "0.2rem 0.5rem",
-                    borderRadius: "4px",
-                  }}
-                >
-                  {session.user.id}
-                </code>
-                <button
-                  className="btn-icon"
-                  onClick={copyToClipboard}
-                  title="Copiar ID"
-                >
-                  <Copy size={16} />
-                </button>
+                <CheckCircle size={20} />
+                <span>Steam Vinculado</span>
               </div>
-            </div>
-
-            <div>
-              {hasSteamLinked ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    color: "var(--success)",
-                  }}
-                >
-                  <CheckCircle size={20} />
-                  <span>Steam Vinculado</span>
-                </div>
-              ) : (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => signIn("steam")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <LinkIcon size={18} /> Vincular cuenta de Steam
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="tab-container">
-            <button
-              onClick={() => setActiveTab("explorar")}
-              className={`tab-btn ${activeTab === "explorar" ? "active" : ""}`}
-            >
-              Explorar Torneos
-            </button>
-            <button
-              onClick={() => setActiveTab("torneos")}
-              className={`tab-btn ${activeTab === "torneos" ? "active" : ""}`}
-            >
-              Mis Torneos
-            </button>
-            <button
-              onClick={() => setActiveTab("inscripciones")}
-              className={`tab-btn ${activeTab === "inscripciones" ? "active" : ""}`}
-            >
-              Mis Inscripciones
-            </button>
-          </div>
-
-          {activeTab === "explorar" && (
-            <>
-              <div
+            ) : (
+              <button
+                className="btn btn-secondary"
+                onClick={() => signIn("steam")}
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "2rem",
-                  flexWrap: "wrap",
-                  gap: "1rem",
+                  gap: "0.5rem",
                 }}
               >
-                <h2 style={{ margin: 0 }}>Torneos Públicos</h2>
-                <input
-                  type="text"
-                  className="input-base"
-                  placeholder="Buscar torneo público..."
-                  value={searchExplore}
-                  onChange={(e) => setSearchExplore(e.target.value)}
-                  style={{ width: "100%", maxWidth: "300px" }}
-                />
+                <LinkIcon size={18} /> Vincular cuenta de Steam
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="tab-container">
+          <button
+            onClick={() => setActiveTab("explorar")}
+            className={`tab-btn ${activeTab === "explorar" ? "active" : ""}`}
+          >
+            Explorar Torneos
+          </button>
+          <button
+            onClick={() => setActiveTab("torneos")}
+            className={`tab-btn ${activeTab === "torneos" ? "active" : ""}`}
+          >
+            Mis Torneos
+          </button>
+          <button
+            onClick={() => setActiveTab("inscripciones")}
+            className={`tab-btn ${activeTab === "inscripciones" ? "active" : ""}`}
+          >
+            Mis Inscripciones
+          </button>
+        </div>
+
+        {activeTab === "explorar" && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "2rem",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
+            >
+              <h2 style={{ margin: 0 }}>Torneos Públicos</h2>
+              <input
+                type="text"
+                className="input-base"
+                placeholder="Buscar torneo público..."
+                value={searchExplore}
+                onChange={(e) => setSearchExplore(e.target.value)}
+                style={{ width: "100%", maxWidth: "300px" }}
+              />
+            </div>
+
+            {publicTournaments.filter(t => t.name.toLowerCase().includes(searchExplore.toLowerCase())).length === 0 ? (
+              <div
+                className="card"
+                style={{ textAlign: "center", padding: "3rem" }}
+              >
+                <p className="text-muted">
+                  No hay torneos disponibles en este momento.
+                </p>
               </div>
-
-              {publicTournaments.filter(t => t.name.toLowerCase().includes(searchExplore.toLowerCase())).length === 0 ? (
-                <div
-                  className="card"
-                  style={{ textAlign: "center", padding: "3rem" }}
-                >
-                  <p className="text-muted">
-                    No hay torneos disponibles en este momento.
-                  </p>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "1rem",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(300px, 1fr))",
-                  }}
-                >
-                  {publicTournaments.filter(t => t.name.toLowerCase().includes(searchExplore.toLowerCase())).map((t) => (
-                    <div
-                      key={t.id}
-                      className="card"
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "1rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "1rem",
-                          alignItems: "center",
-                        }}
-                      >
-                        {t.template_json?.logo_url ? (
-                          <img
-                            src={t.template_json.logo_url}
-                            alt="Logo"
-                            style={{
-                              width: "50px",
-                              height: "50px",
-                              borderRadius: "8px",
-                              objectFit: "cover",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "50px",
-                              height: "50px",
-                              borderRadius: "8px",
-                              background: "rgba(255,255,255,0.1)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Trophy size={24} color="var(--primary)" />
-                          </div>
-                        )}
-                        <h3 style={{ margin: 0 }}>{t.name}</h3>
-                      </div>
-                      <p className="text-muted text-sm" style={{ margin: 0 }}>
-                        {t.description || "Sin descripción"}
-                      </p>
-                      <p className="text-muted text-sm" style={{ margin: 0 }}>
-                        <strong>Estado:</strong>{" "}
-                        <span
-                          className={
-                            t.status === "locked"
-                              ? "text-danger"
-                              : "text-success"
-                          }
-                        >
-                          {t.status === "locked" ? "Cerrado" : "Abierto"}
-                        </span>
-                      </p>
-                      <div
-                        style={{
-                          marginTop: "auto",
-                          display: "flex",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <button
-                          className="btn btn-secondary"
-                          style={{ flex: 1 }}
-                          onClick={() => router.push(`/tournament/${t.id}`)}
-                        >
-                          Ver Detalles
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {activeTab === "torneos" && (
-            <>
+            ) : (
               <div
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "2rem",
-                  flexWrap: "wrap",
+                  display: "grid",
                   gap: "1rem",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(300px, 1fr))",
                 }}
               >
-                <h2 style={{ margin: 0 }}>Mis Torneos</h2>
-                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
-                  <input
-                    type="text"
-                    className="input-base"
-                    placeholder="Buscar torneo..."
-                    value={searchTournaments}
-                    onChange={(e) => setSearchTournaments(e.target.value)}
-                    style={{ width: "100%", maxWidth: "300px" }}
-                  />
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => router.push("/tournament/create")}
+                {publicTournaments.filter(t => t.name.toLowerCase().includes(searchExplore.toLowerCase())).map((t) => (
+                  <div
+                    key={t.id}
+                    className="card"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                    }}
                   >
-                    Crear Nuevo Torneo
-                  </button>
-                </div>
-              </div>
-
-              {tournaments.filter(t => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).length === 0 ? (
-                <div
-                  className="card"
-                  style={{ textAlign: "center", padding: "3rem" }}
-                >
-                  <p className="text-muted">
-                    No has creado ni moderas ningún torneo todavía.
-                  </p>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "1rem",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(300px, 1fr))",
-                  }}
-                >
-                  {tournaments.filter(t => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).map((t) => (
                     <div
-                      key={t.id}
-                      className="card"
                       style={{
                         display: "flex",
-                        flexDirection: "column",
                         gap: "1rem",
+                        alignItems: "center",
                       }}
                     >
-                      <h3 style={{ margin: 0 }}>{t.name}</h3>
-                      <p className="text-muted text-sm" style={{ margin: 0 }}>
-                        {t.description || "Sin descripción"}
-                      </p>
-                      <p className="text-muted text-sm" style={{ margin: 0 }}>
-                        <strong>Equipos Máx:</strong> {t.max_teams}
-                      </p>
-                      <div
-                        style={{
-                          marginTop: "auto",
-                          display: "flex",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <button
-                          className="btn btn-secondary"
-                          style={{ flex: 1 }}
-                          onClick={() => router.push(`/tournament/${t.id}`)}
-                        >
-                          Gestionar
-                        </button>
-                        <button
-                          className="btn btn-secondary btn-icon"
-                          title="Configuración"
-                          onClick={() =>
-                            router.push(`/tournament/${t.id}/edit`)
-                          }
+                      {t.logo_url || t.template_json?.logo_url ? (
+                        <img
+                          src={t.logo_url || t.template_json.logo_url}
+                          alt="Logo"
                           style={{
-                            padding: "0.75rem",
+                            width: "50px",
+                            height: "50px",
+                            borderRadius: "8px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "50px",
+                            height: "50px",
+                            borderRadius: "8px",
+                            background: "rgba(255,255,255,0.1)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                           }}
                         >
-                          <Settings size={20} />
-                        </button>
-                      </div>
+                          <Trophy size={24} color="var(--primary)" />
+                        </div>
+                      )}
+                      <h3 style={{ margin: 0 }}>{t.name}</h3>
                     </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+                    <p className="text-muted text-sm" style={{ margin: 0 }}>
+                      {t.description || "Sin descripción"}
+                    </p>
+                    <p className="text-muted text-sm" style={{ margin: 0 }}>
+                      <strong>Estado:</strong>{" "}
+                      <span
+                        className={
+                          t.status === "locked"
+                            ? "text-danger"
+                            : "text-success"
+                        }
+                      >
+                        {t.status === "locked" ? "Cerrado" : "Abierto"}
+                      </span>
+                    </p>
+                    <div
+                      style={{
+                        marginTop: "auto",
+                        display: "flex",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <button
+                        className="btn btn-secondary"
+                        style={{ flex: 1 }}
+                        onClick={() => router.push(`/tournament/${t.id}`)}
+                      >
+                        Ver Detalles
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
-          {activeTab === "inscripciones" && (
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "2rem",
-                  flexWrap: "wrap",
-                  gap: "1rem",
-                }}
-              >
-                <h2 style={{ margin: 0 }}>Equipos Registrados</h2>
+        {activeTab === "torneos" && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "2rem",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
+            >
+              <h2 style={{ margin: 0 }}>Mis Torneos</h2>
+              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
                 <input
                   type="text"
                   className="input-base"
-                  placeholder="Buscar por equipo o torneo..."
-                  value={searchRegistrations}
-                  onChange={(e) => setSearchRegistrations(e.target.value)}
+                  placeholder="Buscar torneo..."
+                  value={searchTournaments}
+                  onChange={(e) => setSearchTournaments(e.target.value)}
                   style={{ width: "100%", maxWidth: "300px" }}
                 />
+                <button
+                  className="btn btn-primary"
+                  onClick={() => router.push("/tournament/create")}
+                >
+                  Crear Nuevo Torneo
+                </button>
               </div>
+            </div>
 
-              {myTeams.filter(t => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).length === 0 ? (
-                <div
-                  className="card"
-                  style={{ textAlign: "center", padding: "3rem" }}
-                >
-                  <p className="text-muted">
-                    No te has inscrito a ningún torneo todavía.
-                  </p>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "1rem",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(300px, 1fr))",
-                  }}
-                >
-                  {myTeams.filter(t => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).map((team) => {
-                    const isPending = team.status === "pending";
-                    const isAccepted = team.status === "accepted";
-                    const isLocked = team.tournaments?.status === "locked";
+            {tournaments.filter(t => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).length === 0 ? (
+              <div
+                className="card"
+                style={{ textAlign: "center", padding: "3rem" }}
+              >
+                <p className="text-muted">
+                  No has creado ni moderas ningún torneo todavía.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "1rem",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(300px, 1fr))",
+                }}
+              >
+                {tournaments.filter(t => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).map((t) => (
+                  <div
+                    key={t.id}
+                    className="card"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "1rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      {t.logo_url || t.template_json?.logo_url ? (
+                        <img
+                          src={t.logo_url || t.template_json.logo_url}
+                          alt="Logo"
+                          style={{
+                            width: "50px",
+                            height: "50px",
+                            borderRadius: "8px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "50px",
+                            height: "50px",
+                            borderRadius: "8px",
+                            background: "rgba(255,255,255,0.1)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Trophy size={24} color="var(--primary)" />
+                        </div>
+                      )}
+                      <h3 style={{ margin: 0 }}>{t.name}</h3>
+                    </div>
+                    <p className="text-muted text-sm" style={{ margin: 0 }}>
+                      {t.description || "Sin descripción"}
+                    </p>
+                    <p className="text-muted text-sm" style={{ margin: 0 }}>
+                      <strong>Equipos Máx:</strong> {t.max_teams}
+                    </p>
+                    <div
+                      style={{
+                        marginTop: "auto",
+                        display: "flex",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <button
+                        className="btn btn-secondary"
+                        style={{ flex: 1 }}
+                        onClick={() => router.push(`/tournament/${t.id}`)}
+                      >
+                        Gestionar
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-icon"
+                        title="Configuración"
+                        onClick={() =>
+                          router.push(`/tournament/${t.id}/edit`)
+                        }
+                        style={{
+                          padding: "0.75rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Settings size={20} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
-                    return (
+        {activeTab === "inscripciones" && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "2rem",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
+            >
+              <h2 style={{ margin: 0 }}>Equipos Registrados</h2>
+              <input
+                type="text"
+                className="input-base"
+                placeholder="Buscar por equipo o torneo..."
+                value={searchRegistrations}
+                onChange={(e) => setSearchRegistrations(e.target.value)}
+                style={{ width: "100%", maxWidth: "300px" }}
+              />
+            </div>
+
+            {myTeams.filter(t => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).length === 0 ? (
+              <div
+                className="card"
+                style={{ textAlign: "center", padding: "3rem" }}
+              >
+                <p className="text-muted">
+                  No te has inscrito a ningún torneo todavía.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "1rem",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(300px, 1fr))",
+                }}
+              >
+                {myTeams.filter(t => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).map((team) => {
+                  const isPending = team.status === "pending";
+                  const isAccepted = team.status === "accepted";
+                  const isLocked = team.tournaments?.status === "locked";
+
+                  return (
+                    <div
+                      key={team.id}
+                      className="card"
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "1rem",
+                        position: "relative",
+                      }}
+                    >
                       <div
-                        key={team.id}
-                        className="card"
                         style={{
                           display: "flex",
-                          flexDirection: "column",
-                          gap: "1rem",
-                          position: "relative",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
                         }}
+                      >
+                        <h3
+                          style={{
+                            margin: 0,
+                            paddingRight: "1rem",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {team.name}
+                        </h3>
+                        {/* Badge Status */}
+                        <span
+                          style={{
+                            padding: "0.25rem 0.75rem",
+                            borderRadius: "100px",
+                            fontSize: "0.8rem",
+                            fontWeight: "bold",
+                            background: isAccepted
+                              ? "rgba(74, 222, 128, 0.1)"
+                              : "rgba(250, 204, 21, 0.1)",
+                            color: isAccepted
+                              ? "var(--success)"
+                              : "var(--warning)",
+                            border: `1px solid ${isAccepted ? "var(--success)" : "var(--warning)"
+                              }`,
+                          }}
+                        >
+                          {isAccepted ? "Aceptado" : "Pendiente"}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "rgba(255, 255, 255, 0.03)",
+                          border: "1px solid rgba(255, 255, 255, 0.05)",
+                          borderRadius: "8px",
+                          padding: "0.75rem",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                          transition: "background 0.2s ease",
+                        }}
+                        onMouseOver={(e) =>
+                        (e.currentTarget.style.background =
+                          "rgba(255, 255, 255, 0.06)")
+                        }
+                        onMouseOut={(e) =>
+                        (e.currentTarget.style.background =
+                          "rgba(255, 255, 255, 0.03)")
+                        }
                       >
                         <div
                           style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                          }}
-                        >
-                          <h3
-                            style={{
-                              margin: 0,
-                              paddingRight: "1rem",
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {team.name}
-                          </h3>
-                          {/* Badge Status */}
-                          <span
-                            style={{
-                              padding: "0.25rem 0.75rem",
-                              borderRadius: "100px",
-                              fontSize: "0.8rem",
-                              fontWeight: "bold",
-                              background: isAccepted
-                                ? "rgba(74, 222, 128, 0.1)"
-                                : "rgba(250, 204, 21, 0.1)",
-                              color: isAccepted
-                                ? "var(--success)"
-                                : "var(--warning)",
-                              border: `1px solid ${
-                                isAccepted ? "var(--success)" : "var(--warning)"
-                              }`,
-                            }}
-                          >
-                            {isAccepted ? "Aceptado" : "Pendiente"}
-                          </span>
-                        </div>
-
-                        <div
-                          style={{
-                            background: "rgba(255, 255, 255, 0.03)",
-                            border: "1px solid rgba(255, 255, 255, 0.05)",
-                            borderRadius: "8px",
-                            padding: "0.75rem",
+                            background: "rgba(74, 222, 128, 0.1)",
+                            padding: (team.tournaments?.logo_url || team.tournaments?.template_json?.logo_url) ? "0" : "0.5rem",
+                            borderRadius: "6px",
+                            overflow: "hidden",
                             display: "flex",
                             alignItems: "center",
-                            gap: "0.75rem",
-                            transition: "background 0.2s ease",
+                            justifyContent: "center",
+                            width: "32px",
+                            height: "32px"
                           }}
-                          onMouseOver={(e) =>
-                            (e.currentTarget.style.background =
-                              "rgba(255, 255, 255, 0.06)")
-                          }
-                          onMouseOut={(e) =>
-                            (e.currentTarget.style.background =
-                              "rgba(255, 255, 255, 0.03)")
-                          }
                         >
-                          <div
+                          {(team.tournaments?.logo_url || team.tournaments?.template_json?.logo_url) ? (
+                            <img src={team.tournaments.logo_url || team.tournaments.template_json.logo_url} alt="Tournament Logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <Trophy size={16} color="var(--primary)" />
+                          )}
+                        </div>
+                        <div
+                          style={{ display: "flex", flexDirection: "column" }}
+                        >
+                          <span className="text-xs text-muted">
+                            Torneo Inscrito
+                          </span>
+                          <span
                             style={{
-                              background: "rgba(74, 222, 128, 0.1)",
-                              padding: "0.5rem",
-                              borderRadius: "6px",
+                              fontWeight: "bold",
+                              color: "var(--text-main)",
+                              fontSize: "0.95rem",
                             }}
                           >
-                            <Trophy size={16} color="var(--primary)" />
-                          </div>
-                          <div
-                            style={{ display: "flex", flexDirection: "column" }}
-                          >
-                            <span className="text-xs text-muted">
-                              Torneo Inscrito
-                            </span>
-                            <span
-                              style={{
-                                fontWeight: "bold",
-                                color: "var(--text-main)",
-                                fontSize: "0.95rem",
-                              }}
-                            >
-                              {team.tournaments?.name || "Desconocido"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {isLocked && (
-                          <p
-                            className="text-danger text-sm"
-                            style={{ margin: 0, fontWeight: "bold" }}
-                          >
-                            Torneo cerrado (En progreso)
-                          </p>
-                        )}
-
-                        <div
-                          style={{
-                            marginTop: "auto",
-                            display: "flex",
-                            gap: "0.5rem",
-                          }}
-                        >
-                          <button
-                            className="btn btn-primary"
-                            style={{ flex: 1 }}
-                            onClick={() =>
-                              router.push(`/tournament/${team.tournament_id}`)
-                            }
-                          >
-                            Ver Torneo
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            style={{ flex: 1 }}
-                            onClick={() =>
-                              router.push(
-                                `/tournament/${team.tournament_id}/team/${team.id}`
-                              )
-                            }
-                          >
-                            Ver Equipo
-                          </button>
+                            {team.tournaments?.name || "Desconocido"}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </main>
+
+                      {isLocked && (
+                        <p
+                          className="text-danger text-sm"
+                          style={{ margin: 0, fontWeight: "bold" }}
+                        >
+                          Torneo cerrado (En progreso)
+                        </p>
+                      )}
+
+                      <div
+                        style={{
+                          marginTop: "auto",
+                          display: "flex",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <button
+                          className="btn btn-primary"
+                          style={{ flex: 1 }}
+                          onClick={() =>
+                            router.push(`/tournament/${team.tournament_id}`)
+                          }
+                        >
+                          Ver Torneo
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ flex: 1 }}
+                          onClick={() =>
+                            router.push(
+                              `/tournament/${team.tournament_id}/team/${team.id}`
+                            )
+                          }
+                        >
+                          Ver Equipo
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </main>
 
       <footer
         style={{
@@ -685,7 +728,7 @@ export default function TorneosDashboard() {
           paddingBottom: "2rem",
         }}
       >
-        <p className="text-muted text-sm">Powered by taeyong</p>
+        <p className="text-muted text-sm">Powered by Colossus Corporation®</p>
       </footer>
     </div>
   );

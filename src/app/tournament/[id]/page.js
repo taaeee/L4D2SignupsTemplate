@@ -246,7 +246,7 @@ export default function TournamentDetails() {
       } else {
         toast.success("Equipo aceptado correctamente.");
       }
-      
+
       fetchData(); // Reload everything to update UI immediately
     }
   };
@@ -266,7 +266,7 @@ export default function TournamentDetails() {
       .from("teams")
       .delete()
       .eq("id", teamToDelete);
-      
+
     if (!error) {
       toast.success("Equipo eliminado correctamente.");
       fetchData(); // Reload teams and matches to update bracket
@@ -312,7 +312,7 @@ export default function TournamentDetails() {
         parsedLogo = data.url;
         teamTag = data.tag || "";
         teamCountries = data.countries || [];
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const players = team.team_members || [];
@@ -747,16 +747,16 @@ export default function TournamentDetails() {
                 {/* Ver/Editar if Accepted. Can manage OR is captain and tournament not locked */}
                 {(canManage ||
                   (session?.user?.id === team.creator_id && !isLocked)) && (
-                  <button
-                    className="btn btn-secondary"
-                    style={{ flex: 1, borderRadius: 0 }}
-                    onClick={() =>
-                      router.push(`/tournament/${id}/team/${team.id}`)
-                    }
-                  >
-                    VER / EDITAR
-                  </button>
-                )}
+                    <button
+                      className="btn btn-secondary"
+                      style={{ flex: 1, borderRadius: 0 }}
+                      onClick={() =>
+                        router.push(`/tournament/${id}/team/${team.id}`)
+                      }
+                    >
+                      VER / EDITAR
+                    </button>
+                  )}
               </>
             )}
             {team.status === "pending" &&
@@ -964,9 +964,9 @@ export default function TournamentDetails() {
               }}
               title="Copia este enlace para compartir el torneo."
             >
-              <LinkIcon size={20} /> Copiar Enlace del Torneo
+              <LinkIcon size={20} /> Enlace del Torneo
             </button>
-            
+
             {!isLocked && !isRegistrationFull && (
               <button
                 className="btn btn-primary"
@@ -983,7 +983,7 @@ export default function TournamentDetails() {
                 }}
                 title="Copia este enlace y envíalo para que se inscriban."
               >
-                <LinkIcon size={20} /> Copiar Enlace de Inscripción
+                <LinkIcon size={20} /> Enlace de Inscripción
               </button>
             )}
           </div>
@@ -1016,15 +1016,15 @@ export default function TournamentDetails() {
               isLocked
                 ? "text-danger"
                 : isFull
-                ? "text-warning"
-                : "text-success"
+                  ? "text-warning"
+                  : "text-success"
             }
           >
             {isLocked
               ? "Torneo Cerrado"
               : isRegistrationFull
-              ? "Registro Lleno (300)"
-              : "Registro Abierto"}
+                ? "Registro Lleno (300)"
+                : "Registro Abierto"}
           </p>
         </div>
         <div style={{ flex: "1 1 200px", textAlign: "center" }}>
@@ -1091,9 +1091,8 @@ export default function TournamentDetails() {
           }}
         >
           <button
-            className={`btn ${
-              activeTab === "teams" ? "btn-primary" : "btn-secondary text-muted"
-            }`}
+            className={`btn ${activeTab === "teams" ? "btn-primary" : "btn-secondary text-muted"
+              }`}
             style={{ borderRadius: "8px", border: "none" }}
             onClick={() => setActiveTab("teams")}
           >
@@ -1103,11 +1102,10 @@ export default function TournamentDetails() {
           </button>
           {(canManage || !isLocked) && (
             <button
-              className={`btn ${
-                activeTab === "pending"
+              className={`btn ${activeTab === "pending"
                   ? "btn-primary"
                   : "btn-secondary text-muted"
-              }`}
+                }`}
               style={{ borderRadius: "8px", border: "none" }}
               onClick={() => setActiveTab("pending")}
             >
@@ -1115,11 +1113,10 @@ export default function TournamentDetails() {
             </button>
           )}
           <button
-            className={`btn ${
-              activeTab === "bracket"
+            className={`btn ${activeTab === "bracket"
                 ? "btn-primary"
                 : "btn-secondary text-muted"
-            }`}
+              }`}
             style={{ borderRadius: "8px", border: "none" }}
             onClick={() => setActiveTab("bracket")}
           >
@@ -1157,14 +1154,14 @@ export default function TournamentDetails() {
                     ? "Generando..."
                     : tournament.bracket_status === "generated" ||
                       tournament.bracket_status === "completed"
-                    ? "Regenerar Llaves"
-                    : "Generar Llaves"}
+                      ? "Regenerar Llaves"
+                      : "Generar Llaves"}
                 </button>
               )}
             </div>
 
             {tournament.bracket_status === "generated" ||
-            tournament.bracket_status === "completed" ? (
+              tournament.bracket_status === "completed" ? (
               <BracketViewer
                 matches={matches}
                 teams={acceptedTeamsAll}

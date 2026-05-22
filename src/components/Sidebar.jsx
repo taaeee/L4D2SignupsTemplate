@@ -3,11 +3,13 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, Map, Menu, X } from "lucide-react";
+import { Trophy, Map, Menu, X, LogOut } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   const toggleSidebar = () => {
     setIsExpanded(!isExpanded);
@@ -114,6 +116,56 @@ export default function Sidebar() {
           );
         })}
       </nav>
+
+      {session && (
+        <div
+          style={{
+            padding: isExpanded ? "1.5rem" : "1.5rem 0",
+            borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "1rem",
+            background: "rgba(0,0,0,0.2)",
+          }}
+        >
+          <Link href="/settings" style={{ display: "flex", alignItems: "center", gap: isExpanded ? "1rem" : "0", width: "100%", justifyContent: isExpanded ? "flex-start" : "center", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+            <img
+              src={session.user.image || `https://ui-avatars.com/api/?name=${session.user.name}`}
+              alt="Avatar"
+              style={{ width: "40px", height: "40px", borderRadius: "50%", minWidth: "40px", border: "2px solid transparent", transition: "border-color 0.2s" }}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--primary)"}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = "transparent"}
+            />
+            {isExpanded && (
+              <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
+                <p style={{ margin: 0, fontWeight: "bold", fontSize: "0.9rem", transition: "color 0.2s" }}
+                   onMouseEnter={(e) => e.currentTarget.style.color = "var(--primary)"}
+                   onMouseLeave={(e) => e.currentTarget.style.color = "inherit"}
+                >{session.user.name}</p>
+              </div>
+            )}
+          </Link>
+          
+          <button
+            className="btn btn-danger"
+            onClick={() => signOut()}
+            style={{
+              width: isExpanded ? "100%" : "40px",
+              height: "40px",
+              padding: isExpanded ? "0.5rem" : "0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+            }}
+            title="Cerrar Sesión"
+          >
+            <LogOut size={18} />
+            {isExpanded && <span>Cerrar Sesión</span>}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

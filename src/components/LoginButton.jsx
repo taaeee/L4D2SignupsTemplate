@@ -13,21 +13,7 @@ export default function LoginButton() {
   }
 
   if (session) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-        <img 
-          src={session.user.image || `https://ui-avatars.com/api/?name=${session.user.name}`} 
-          alt="Avatar" 
-          style={{ width: "40px", height: "40px", borderRadius: "50%" }}
-        />
-        <div>
-          <p style={{ margin: 0, fontWeight: "bold" }}>{session.user.name}</p>
-        </div>
-        <button className="btn btn-danger" onClick={() => signOut()}>
-          Cerrar Sesión
-        </button>
-      </div>
-    );
+    return null;
   }
 
   return (

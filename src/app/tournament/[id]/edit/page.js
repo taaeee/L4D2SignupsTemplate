@@ -24,7 +24,7 @@ export default function EditTournament() {
   const [maxTeams, setMaxTeams] = useState(16);
   const [tStatus, setTStatus] = useState("open");
   const [moderators, setModerators] = useState([]);
-  
+
   // Extra Options
   const [logoFile, setLogoFile] = useState(null);
   const [logoUrl, setLogoUrl] = useState("");
@@ -33,7 +33,7 @@ export default function EditTournament() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [is1v1, setIs1v1] = useState(false);
   const [tournamentFormat, setTournamentFormat] = useState("single_elimination");
-  
+
   // New Mod Input
   const [newModId, setNewModId] = useState("");
   const [inviteLink, setInviteLink] = useState("");
@@ -70,7 +70,7 @@ export default function EditTournament() {
       setMaxTeams(data.max_teams || 16);
       setTStatus(data.status || "open");
       setModerators(data.moderators || []);
-      
+
       if (data.template_json) {
         setLogoUrl(data.logo_url || data.template_json.logo_url || "");
         setRules(data.template_json.rules || "");
@@ -123,7 +123,7 @@ export default function EditTournament() {
   const handleSave = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-    
+
     let finalLogoUrl = logoUrl;
     if (logoFile) {
       const fileExt = logoFile.name.split('.').pop();
@@ -136,7 +136,7 @@ export default function EditTournament() {
         setIsSaving(false);
         return toast.error("Error subiendo el logo: " + uploadError.message);
       }
-      
+
       const { data: { publicUrl } } = supabase.storage.from("team-logos").getPublicUrl(fileName);
       finalLogoUrl = publicUrl;
     }
@@ -178,7 +178,7 @@ export default function EditTournament() {
   const executeDelete = async () => {
     setIsSaving(true);
     const { error } = await supabase.from("tournaments").delete().eq("id", id);
-    
+
     if (error) {
       toast.error("Error al eliminar: " + error.message);
       setIsSaving(false);
@@ -241,8 +241,8 @@ export default function EditTournament() {
             </div>
             <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   id="private-tournament"
                   checked={isPrivate}
                   onChange={e => setIsPrivate(e.target.checked)}
@@ -253,8 +253,8 @@ export default function EditTournament() {
                 </label>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   id="is1v1-tournament"
                   checked={is1v1}
                   onChange={e => setIs1v1(e.target.checked)}
@@ -274,19 +274,19 @@ export default function EditTournament() {
           <div className="flex gap-4" style={{ flexWrap: "wrap", marginBottom: "1.5rem" }}>
             <div style={{ flex: "1 1 200px" }}>
               <label className="text-sm text-muted font-medium block mb-2">Twitch</label>
-              <input className="input-base" value={socialLinks.twitch} onChange={e => setSocialLinks({...socialLinks, twitch: e.target.value})} placeholder="URL de Twitch" />
+              <input className="input-base" value={socialLinks.twitch} onChange={e => setSocialLinks({ ...socialLinks, twitch: e.target.value })} placeholder="URL de Twitch" />
             </div>
             <div style={{ flex: "1 1 200px" }}>
               <label className="text-sm text-muted font-medium block mb-2">Twitter (X)</label>
-              <input className="input-base" value={socialLinks.twitter} onChange={e => setSocialLinks({...socialLinks, twitter: e.target.value})} placeholder="URL de Twitter" />
+              <input className="input-base" value={socialLinks.twitter} onChange={e => setSocialLinks({ ...socialLinks, twitter: e.target.value })} placeholder="URL de Twitter" />
             </div>
             <div style={{ flex: "1 1 200px" }}>
               <label className="text-sm text-muted font-medium block mb-2">YouTube</label>
-              <input className="input-base" value={socialLinks.youtube} onChange={e => setSocialLinks({...socialLinks, youtube: e.target.value})} placeholder="URL de YouTube" />
+              <input className="input-base" value={socialLinks.youtube} onChange={e => setSocialLinks({ ...socialLinks, youtube: e.target.value })} placeholder="URL de YouTube" />
             </div>
             <div style={{ flex: "1 1 200px" }}>
               <label className="text-sm text-muted font-medium block mb-2">Discord</label>
-              <input className="input-base" value={socialLinks.discord} onChange={e => setSocialLinks({...socialLinks, discord: e.target.value})} placeholder="URL de Discord" />
+              <input className="input-base" value={socialLinks.discord} onChange={e => setSocialLinks({ ...socialLinks, discord: e.target.value })} placeholder="URL de Discord" />
             </div>
           </div>
           <div>
@@ -301,19 +301,19 @@ export default function EditTournament() {
           <p className="text-muted mb-4">
             Si "Cierras" el torneo, nadie más podrá inscribirse y los capitanes no podrán modificar sus equipos ni jugadores. Solo tú y los moderadores podrán hacer cambios.
           </p>
-          
+
           <div style={{ display: "flex", gap: "1rem" }}>
-            <button 
-              type="button" 
-              className={`btn ${tStatus === "open" ? "btn-primary" : "btn-secondary"}`} 
+            <button
+              type="button"
+              className={`btn ${tStatus === "open" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setTStatus("open")}
               style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
             >
               <Unlock size={20} /> Torneo Abierto
             </button>
-            <button 
-              type="button" 
-              className={`btn ${tStatus === "locked" ? "btn-danger" : "btn-secondary"}`} 
+            <button
+              type="button"
+              className={`btn ${tStatus === "locked" ? "btn-danger" : "btn-secondary"}`}
               onClick={() => setTStatus("locked")}
               style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
             >
@@ -345,15 +345,15 @@ export default function EditTournament() {
           )}
 
           <p className="text-muted mb-4">
-            También puedes añadir el ID de la cuenta (UUID) manualmente si lo prefieres.
+            También puedes añadir el ID de la cuenta manualmente si lo prefieres.
           </p>
-          
+
           <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
-            <input 
-              className="input-base" 
-              placeholder="UUID del usuario..." 
-              value={newModId} 
-              onChange={e => setNewModId(e.target.value)} 
+            <input
+              className="input-base"
+              placeholder="ID del usuario..."
+              value={newModId}
+              onChange={e => setNewModId(e.target.value)}
               style={{ flex: 1 }}
             />
             <button type="button" className="btn btn-secondary" onClick={handleAddModerator}>
@@ -397,7 +397,7 @@ export default function EditTournament() {
           <button type="button" className="btn text-danger" onClick={handleDeleteTournament} style={{ border: "1px solid var(--color-error)" }}>
             Eliminar Torneo
           </button>
-          
+
           <div style={{ display: "flex", gap: "1rem" }}>
             <button type="button" className="btn btn-secondary" onClick={() => router.push(`/tournament/${id}`)}>
               Cancelar
@@ -409,7 +409,7 @@ export default function EditTournament() {
         </div>
       </form>
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={showConfirmDelete}
         title="Eliminar Torneo"
         message="¿Estás 100% seguro de que deseas eliminar este torneo? Esto borrará TODOS los equipos y jugadores. Esta acción no se puede deshacer."

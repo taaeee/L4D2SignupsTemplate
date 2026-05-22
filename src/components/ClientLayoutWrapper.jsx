@@ -10,7 +10,8 @@ export default function ClientLayoutWrapper({ children }) {
   const { status } = useSession();
 
   // Hide the sidebar on the home/information page only if unauthenticated
-  const showSidebar = pathname !== "/" || status === "authenticated";
+  // Always hide the sidebar on the /login page
+  const showSidebar = (pathname !== "/" || status === "authenticated") && !pathname.startsWith("/login");
 
   if (!showSidebar) {
     return <main style={{ minHeight: "100vh" }}>{children}</main>;

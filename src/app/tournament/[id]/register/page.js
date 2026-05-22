@@ -16,6 +16,7 @@ export default function RegisterTeam() {
   const [tournament, setTournament] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSteamLinked, setHasSteamLinked] = useState(true);
   
   // Custom Tag & Country State
   const [teamTag, setTeamTag] = useState("");
@@ -44,8 +45,21 @@ export default function RegisterTeam() {
     } else if (status === "authenticated" && id) {
       fetchData();
       fetchCountries();
+      fetchSteamLinked();
     }
   }, [id, status, router]);
+
+  const fetchSteamLinked = async () => {
+    try {
+      const res = await fetch("/api/user/accounts");
+      const accountData = await res.json();
+      if (accountData.accounts) {
+        setHasSteamLinked(accountData.accounts.some((acc) => acc.provider === "steam"));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchCountries = async () => {
     try {
@@ -271,6 +285,13 @@ export default function RegisterTeam() {
         <h1>{tpl?.is1v1 ? "Registro Individual" : "Registro de Equipo"}</h1>
         <p className="text-muted">Inscribiendo a: {tournament.name}</p>
       </header>
+
+      {!hasSteamLinked && !tpl?.is1v1 && (
+        <div style={{ background: "rgba(250, 204, 21, 0.1)", border: "1px solid var(--warning)", padding: "1rem", borderRadius: "8px", marginBottom: "2rem", color: "var(--warning)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+          <span>⚠️ Si deseas registrar jugadores fácilmente desde tu lista de amigos de Steam, necesitas vincular tu cuenta.</span>
+          <button type="button" className="btn btn-secondary" onClick={() => router.push("/settings")}>Vincular Steam</button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
         {/* TEAM DETAILS */}
