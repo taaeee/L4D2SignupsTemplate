@@ -5,11 +5,11 @@ import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ConfirmModal from "@/components/ConfirmModal";
-import { LinkIcon, Unlink, ArrowLeft } from "lucide-react";
+import { LinkIcon, Unlink, ArrowLeft, User, Mail, Lock, KeyRound, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const [hasSteamLinked, setHasSteamLinked] = useState(false);
   const [hasDiscordLinked, setHasDiscordLinked] = useState(false);
   const [steamInfo, setSteamInfo] = useState<any>(null);
@@ -17,13 +17,28 @@ export default function SettingsPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const router = useRouter();
 
+  // Profile Form State
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Password Form State
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/");
     } else if (status === "authenticated") {
       fetchAccounts();
+      if (session?.user) {
+        setName(session.user.name || "");
+        setEmail(session.user.email || "");
+      }
     }
-  }, [status, router]);
+  }, [status, router, session]);
 
   const fetchAccounts = async () => {
     setIsLoading(true);
@@ -58,6 +73,70 @@ export default function SettingsPage() {
       console.error("Error fetching accounts:", e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Error al actualizar el perfil.");
+      } else {
+        toast.success("Perfil actualizado correctamente.");
+        await update({ name, email });
+      }
+    } catch (err) {
+      toast.error("Error de red al guardar el perfil.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (newPassword !== confirmPassword) {
+      toast.error("Las contraseñas nuevas no coinciden.");
+      return;
+    }
+
+    setSavingPassword(true);
+
+    try {
+      const res = await fetch("/api/user/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Error al cambiar la contraseña.");
+      } else {
+        toast.success("¡Contraseña actualizada con éxito!");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch (err) {
+      toast.error("Error al conectar con el servidor.");
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -106,31 +185,149 @@ export default function SettingsPage() {
 
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", minHeight: "100vh", paddingBottom: "4rem" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "1.5rem 0", marginBottom: "3rem", borderBottom: "1px solid var(--border)" }}>
+      <header style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "1.5rem 0", marginBottom: "2rem", borderBottom: "1px solid var(--border)" }}>
         <button className="btn-icon" onClick={() => router.back()} title="Volver">
           <ArrowLeft size={24} />
         </button>
         <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Ajustes de Cuenta</h1>
       </header>
 
-      <main style={{ flex: 1, maxWidth: "600px", margin: "0 auto", width: "100%" }}>
-        <div className="card" style={{ marginBottom: "2rem" }}>
-          <h2 style={{ marginBottom: "1.5rem" }}>Perfil</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+      <main style={{ flex: 1, maxWidth: "640px", margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: "2rem" }}>
+        
+        {/* Profile Card */}
+        <div className="card">
+          <h2 style={{ marginBottom: "1.5rem", fontSize: "1.25rem" }}>Perfil de Usuario</h2>
+          
+          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", marginBottom: "1.5rem" }}>
             <img 
-              src={session.user.image || `https://ui-avatars.com/api/?name=${session.user.name}`} 
+              src={session.user.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(session.user.name || "User")}`} 
               alt="Avatar" 
-              style={{ width: "80px", height: "80px", borderRadius: "50%" }}
+              style={{ width: "72px", height: "72px", borderRadius: "50%", border: "2px solid var(--border-light)" }}
             />
             <div>
               <p style={{ margin: 0, fontWeight: "bold", fontSize: "1.2rem" }}>{session.user.name}</p>
               <p className="text-muted" style={{ margin: "0.25rem 0 0 0" }}>{session.user.email}</p>
             </div>
           </div>
+
+          <form onSubmit={handleUpdateProfile} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.875rem", color: "var(--muted)" }}>
+                Nombre de usuario
+              </label>
+              <div className="settings-input-group">
+                <User size={18} className="settings-input-icon" />
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  minLength={2}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.875rem", color: "var(--muted)" }}>
+                Correo electrónico asociado
+              </label>
+              <div className="settings-input-group">
+                <Mail size={18} className="settings-input-icon" />
+                <input
+                  type="email"
+                  className="settings-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="btn btn-primary"
+              style={{ alignSelf: "flex-start", marginTop: "0.5rem", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}
+            >
+              <Save size={18} />
+              {savingProfile ? "Guardando..." : "Guardar Perfil"}
+            </button>
+          </form>
         </div>
 
+        {/* Change Password Card */}
         <div className="card">
-          <h2 style={{ marginBottom: "1.5rem" }}>Cuentas Vinculadas</h2>
+          <h2 style={{ marginBottom: "1.5rem", fontSize: "1.25rem" }}>Seguridad & Contraseña</h2>
+
+          <form onSubmit={handleChangePassword} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.875rem", color: "var(--muted)" }}>
+                Contraseña actual
+              </label>
+              <div className="settings-input-group">
+                <Lock size={18} className="settings-input-icon" />
+                <input
+                  type="password"
+                  placeholder="Ingresa tu contraseña actual"
+                  className="settings-input"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.875rem", color: "var(--muted)" }}>
+                Nueva contraseña
+              </label>
+              <div className="settings-input-group">
+                <KeyRound size={18} className="settings-input-icon" />
+                <input
+                  type="password"
+                  placeholder="Nueva contraseña (mín. 8 caracteres)"
+                  className="settings-input"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={8}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.875rem", color: "var(--muted)" }}>
+                Confirmar nueva contraseña
+              </label>
+              <div className="settings-input-group">
+                <KeyRound size={18} className="settings-input-icon" />
+                <input
+                  type="password"
+                  placeholder="Repite la nueva contraseña"
+                  className="settings-input"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  minLength={8}
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingPassword}
+              className="btn btn-primary"
+              style={{ alignSelf: "flex-start", marginTop: "0.5rem", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}
+            >
+              <Lock size={18} />
+              {savingPassword ? "Actualizando..." : "Cambiar Contraseña"}
+            </button>
+          </form>
+        </div>
+
+        {/* Linked Accounts Card */}
+        <div className="card">
+          <h2 style={{ marginBottom: "1.5rem", fontSize: "1.25rem" }}>Cuentas Vinculadas</h2>
           
           <div style={{ 
             display: "flex", 
@@ -204,22 +401,51 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
-
-          <p className="text-muted text-sm" style={{ marginTop: "1rem" }}>
-            Vincular tus cuentas te permite registrar equipos de forma rápida y utilizar otras funciones automatizadas.
-          </p>
         </div>
       </main>
 
       <ConfirmModal 
         isOpen={showConfirmModal}
         title="Desvincular Steam"
-        message="¿Estás seguro de que deseas desvincular tu cuenta de Steam? Si lo haces, no podrás importar jugadores desde tu lista de amigos hasta que la vuelvas a vincular."
+        message="¿Estás seguro de que deseas desvincular tu cuenta de Steam?"
         onConfirm={handleUnlinkSteam}
         onCancel={() => setShowConfirmModal(false)}
         confirmText="Sí, Desvincular"
         cancelText="Cancelar"
         isDanger={true}
+      />
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        .settings-input-group {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+        .settings-input-icon {
+          position: absolute;
+          left: 12px;
+          color: #6b7280;
+          pointer-events: none;
+        }
+        .settings-input {
+          width: 100%;
+          padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+          background: rgba(0, 0, 0, 0.2);
+          border: 1px solid var(--border, #374151);
+          border-radius: 8px;
+          color: white;
+          font-size: 0.95rem;
+          outline: none;
+          transition: border-color 0.2s;
+        }
+        .settings-input:focus {
+          border-color: var(--primary, #3b82f6);
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+      `,
+        }}
       />
     </div>
   );

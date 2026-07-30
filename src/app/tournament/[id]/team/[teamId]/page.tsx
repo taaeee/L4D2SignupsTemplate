@@ -8,6 +8,7 @@ import { Trash2, Save, Users, Plus, X, ExternalLink, Upload } from "lucide-react
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { fetchBansInBatches } from "@/lib/ban-checker";
 
 interface TeamMember {
   id: string;
@@ -128,25 +129,19 @@ export default function TeamDetails() {
       setPlayers(membersData || []);
     }
 
-    // 4. Fetch Community Bans
-    try {
-      if (membersData && membersData.length > 0) {
-        const steamIds = membersData.map((m: any) => m.steam_id_64).filter(Boolean);
-        const bansRes = await fetch("/api/bans/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ steamIds })
-        });
-        if (bansRes.ok) {
-          const bansData = await bansRes.json();
-          setCommunityBans(bansData);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch community bans", e);
-    }
-
     setIsLoading(false);
+
+    // 4. Fetch Community Bans in background without blocking page render
+    if (membersData && membersData.length > 0) {
+      const steamIds = membersData.map((m: any) => m.steam_id_64).filter(Boolean);
+      if (steamIds.length > 0) {
+        fetchBansInBatches(steamIds, (batchData) => {
+          setCommunityBans((prev) => ({ ...prev, ...batchData }));
+        }).catch((e) => {
+          console.error("Failed to fetch community bans in background", e);
+        });
+      }
+    }
   };
 
   const getPlayerBan = (steamId64?: string) => {

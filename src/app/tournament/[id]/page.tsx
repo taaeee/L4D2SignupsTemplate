@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
 import ReactMarkdown from "react-markdown";
+import { fetchBansInBatches } from "@/lib/ban-checker";
 import BracketViewer from "@/components/BracketViewer";
 import SwissViewer from "@/components/SwissViewer";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -120,35 +121,27 @@ export default function TournamentDetails() {
       setMatches(matchesData);
     }
 
-    try {
-      if (teamsData && teamsData.length > 0) {
-        // Collect all steamIds from all teams
-        const allSteamIds: string[] = [];
-        teamsData.forEach((team) => {
-          if (team.team_members) {
-            team.team_members.forEach((m) => {
-              if (m.steam_id_64) allSteamIds.push(m.steam_id_64);
-            });
-          }
-        });
-
-        if (allSteamIds.length > 0) {
-          const bansRes = await fetch("/api/bans/check", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ steamIds: allSteamIds }),
-          });
-          if (bansRes.ok) {
-            const bansData = await bansRes.json();
-            setCommunityBans(bansData);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch community bans", e);
-    }
-
     setIsLoading(false);
+
+    // Fetch Community Bans in background batches without blocking page render
+    if (teamsData && teamsData.length > 0) {
+      const allSteamIds: string[] = [];
+      teamsData.forEach((team) => {
+        if (team.team_members) {
+          team.team_members.forEach((m) => {
+            if (m.steam_id_64) allSteamIds.push(m.steam_id_64);
+          });
+        }
+      });
+
+      if (allSteamIds.length > 0) {
+        fetchBansInBatches(allSteamIds, (batchData) => {
+          setCommunityBans((prev) => ({ ...prev, ...batchData }));
+        }).catch((e) => {
+          console.error("Failed to fetch community bans in background", e);
+        });
+      }
+    }
   };
 
   const refreshMatches = async () => {
