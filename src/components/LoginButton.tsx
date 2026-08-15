@@ -1,6 +1,6 @@
 "use client";
 
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LogIn } from "lucide-react";
 import LoadingSpinner from "./LoadingSpinner";

@@ -201,6 +201,24 @@ export default function MapVetoInterface() {
       .from("map_vetoes")
       .update({ state: newState })
       .eq("id", id as string);
+
+    // If veto is completed and linked to a match, auto-sync selected maps to match schedule
+    if (status === "completed" && vetoSession.match_id) {
+      try {
+        const pickedMapNames = finalMaps
+          .filter((m: any) => m.status === "picked")
+          .map((m: any) => m.name);
+
+        if (pickedMapNames.length > 0) {
+          await supabase
+            .from("matches")
+            .update({ selected_maps: pickedMapNames })
+            .eq("id", vetoSession.match_id);
+        }
+      } catch (e) {
+        console.warn("Could not sync maps to match:", e);
+      }
+    }
   };
 
   const handleEndVeto = async () => {

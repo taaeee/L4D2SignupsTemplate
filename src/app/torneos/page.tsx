@@ -169,7 +169,7 @@ export default function TorneosDashboard() {
         }}
       >
         <h1 style={{ fontSize: "1.5rem", margin: 0 }}>
-          <span className="text-gradient">L4D2</span> Dashboard
+          <span className="text-gradient">Dashboard </span>
         </h1>
         <LoginButton />
       </header>

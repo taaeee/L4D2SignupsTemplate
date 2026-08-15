@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, Map, LogOut, Settings } from "lucide-react";
+import { Trophy, Swords, Map, LogOut, Settings } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { Dock, DockIcon } from "@/components/ui/dock";
 
@@ -13,6 +13,7 @@ export default function NavigationDock() {
 
   const navItems = [
     { name: "Torneos", href: "/torneos", icon: Trophy },
+    { name: "Matches", href: "/matches", icon: Swords },
     { name: "Map Veto", href: "/map-veto", icon: Map },
   ];
 
@@ -63,7 +64,7 @@ export default function NavigationDock() {
 
               <DockIcon>
                 <button
-                  onClick={() => signOut()}
+                  onClick={() => signOut({ callbackUrl: "/" })}
                   title="Cerrar Sesión"
                   className="flex items-center justify-center w-full h-full transition-colors bg-transparent border-none cursor-pointer text-red-400 hover:text-red-500"
                 >

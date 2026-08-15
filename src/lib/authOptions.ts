@@ -2,6 +2,7 @@ import { AuthOptions } from "next-auth";
 import { decode, encode } from "next-auth/jwt";
 import GoogleProvider from "next-auth/providers/google";
 import DiscordProvider from "next-auth/providers/discord";
+import TwitchProvider from "next-auth/providers/twitch";
 import SteamProvider from "next-auth-steam";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { SupabaseAdapter } from "@auth/supabase-adapter";
@@ -110,6 +111,10 @@ export const getAuthOptions = (req?: NextRequest | Request): AuthOptions => {
       DiscordProvider({
         clientId: process.env.DISCORD_CLIENT_ID!,
         clientSecret: process.env.DISCORD_CLIENT_SECRET!,
+      }),
+      TwitchProvider({
+        clientId: process.env.TWITCH_CLIENT_ID!,
+        clientSecret: process.env.TWITCH_CLIENT_SECRET!,
       }),
       SteamProvider(req as any, {
         clientSecret: process.env.STEAM_API_KEY!,

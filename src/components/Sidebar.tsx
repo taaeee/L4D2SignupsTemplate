@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, Map, Menu, X, LogOut } from "lucide-react";
+import { Trophy, Swords, Map, Menu, X, LogOut } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 
 export default function Sidebar() {
@@ -17,6 +17,7 @@ export default function Sidebar() {
 
   const navItems = [
     { name: "Torneos", href: "/torneos", icon: Trophy },
+    { name: "Matches", href: "/matches", icon: Swords },
     { name: "Map Veto", href: "/map-veto", icon: Map },
   ];
 
@@ -79,16 +80,6 @@ export default function Sidebar() {
                 transition: "all 0.2s ease",
                 whiteSpace: "nowrap",
               }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.02)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "transparent";
-                }
-              }}
             >
               <div
                 style={{
@@ -134,14 +125,10 @@ export default function Sidebar() {
               src={session.user?.image || `https://ui-avatars.com/api/?name=${session.user?.name}`}
               alt="Avatar"
               style={{ width: "40px", height: "40px", borderRadius: "50%", minWidth: "40px", border: "2px solid transparent", transition: "border-color 0.2s" }}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--primary)"}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = "transparent"}
             />
             {isExpanded && (
               <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
                 <p style={{ margin: 0, fontWeight: "bold", fontSize: "0.9rem", transition: "color 0.2s" }}
-                   onMouseEnter={(e) => e.currentTarget.style.color = "var(--primary)"}
-                   onMouseLeave={(e) => e.currentTarget.style.color = "inherit"}
                 >{session.user?.name}</p>
               </div>
             )}
@@ -149,7 +136,7 @@ export default function Sidebar() {
           
           <button
             className="btn btn-danger"
-            onClick={() => signOut()}
+            onClick={() => signOut({ callbackUrl: "/" })}
             style={{
               width: isExpanded ? "100%" : "40px",
               height: "40px",

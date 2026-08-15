@@ -223,21 +223,29 @@ export default function MatchCard({ match, teamMap, canManage, onClick, matchNum
         </span>
       </div>
 
-      {/* Match number overlay */}
+      {/* Match number overlay: middle vertically, all the way to the right */}
       {matchNumber && (
-        <div style={{
-          position: 'absolute',
-          top: '0',
-          right: '0',
-          background: 'var(--primary)',
-          color: '#000',
-          fontWeight: 'bold',
-          fontSize: '0.65rem',
-          padding: '2px 6px',
-          borderBottomLeftRadius: '6px',
-          zIndex: 2,
-          boxShadow: '-1px 1px 4px rgba(0,0,0,0.4)'
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            right: '0',
+            transform: 'translateY(-50%)',
+            background: '#14161A',
+            color: 'var(--primary)',
+            border: '1px solid rgba(111, 175, 58, 0.4)',
+            borderRight: 'none',
+            borderTopLeftRadius: '4px',
+            borderBottomLeftRadius: '4px',
+            fontWeight: 'bold',
+            fontSize: '0.65rem',
+            padding: '1px 5px',
+            zIndex: 2,
+            boxShadow: '-1px 0 6px rgba(0,0,0,0.6)',
+            pointerEvents: 'none',
+            letterSpacing: '0.5px'
+          }}
+        >
           M{matchNumber}
         </div>
       )}

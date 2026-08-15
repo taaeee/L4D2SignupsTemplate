@@ -18,6 +18,12 @@ import {
   X,
   Link as LinkIcon,
   Copy,
+  Tv,
+  ExternalLink,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -26,6 +32,19 @@ import { fetchBansInBatches } from "@/lib/ban-checker";
 import BracketViewer from "@/components/BracketViewer";
 import SwissViewer from "@/components/SwissViewer";
 import LoadingSpinner from "@/components/LoadingSpinner";
+
+// Twitch SVG Icon
+const TwitchIcon = ({ size = 18, className = "" }: { size?: number; className?: string }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+  >
+    <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z" />
+  </svg>
+);
 
 import { Database } from '@/lib/database.types';
 
@@ -78,13 +97,51 @@ export default function TournamentDetails() {
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [communityBans, setCommunityBans] = useState<Record<string, any>>({});
 
+  // Tournament Casters State
+  const [tournamentCasters, setTournamentCasters] = useState<any[]>([]);
+  const [tournamentApplications, setTournamentApplications] = useState<any[]>([]);
+  const [userTournamentApp, setUserTournamentApp] = useState<any>(null);
+  const [isCasterModalOpen, setIsCasterModalOpen] = useState(false);
+  const [casterForm, setCasterForm] = useState({
+    alias: "",
+    bio: "",
+    twitch_channel: "",
+    youtube_channel: "",
+    languages: ["Español"],
+  });
+  const [isSubmittingCaster, setIsSubmittingCaster] = useState(false);
+
   const templateJson = (tournament?.template_json as any) || {};
 
   useEffect(() => {
     if (id) {
       fetchData();
+      fetchTournamentCasters();
     }
   }, [id]);
+
+  const fetchTournamentCasters = async () => {
+    try {
+      const res = await fetch(`/api/tournament/${id}/casters`);
+      if (res.ok) {
+        const data = await res.json();
+        setTournamentCasters(data.casters || []);
+        setTournamentApplications(data.applications || []);
+        setUserTournamentApp(data.userApplication || null);
+        if (data.userApplication) {
+          setCasterForm({
+            alias: data.userApplication.alias || "",
+            bio: data.userApplication.bio || "",
+            twitch_channel: data.userApplication.twitch_channel || "",
+            youtube_channel: data.userApplication.youtube_channel || "",
+            languages: data.userApplication.languages || ["Español"],
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching tournament casters:", e);
+    }
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -314,6 +371,49 @@ export default function TournamentDetails() {
 
   const handleRejectOrDelete = (teamId: string) => {
     setTeamToDelete(teamId);
+  };
+
+  const handleApplyCaster = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingCaster(true);
+    try {
+      const res = await fetch(`/api/tournament/${id}/casters`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(casterForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Error al enviar solicitud.");
+      } else {
+        toast.success("Solicitud enviada correctamente para este torneo.");
+        setIsCasterModalOpen(false);
+        fetchTournamentCasters();
+      }
+    } catch (e) {
+      toast.error("Error de red al enviar la solicitud.");
+    } finally {
+      setIsSubmittingCaster(false);
+    }
+  };
+
+  const handleReviewCaster = async (applicationId: string, action: "approve" | "reject") => {
+    try {
+      const res = await fetch(`/api/tournament/${id}/casters`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Error al actualizar la solicitud.");
+      } else {
+        toast.success(data.message || "Solicitud actualizada.");
+        fetchTournamentCasters();
+      }
+    } catch (e) {
+      toast.error("Error de red al procesar solicitud.");
+    }
   };
 
   const handleUpdateTeamStatus = async (teamId: string, newStatus: string, statusLabel: string) => {
@@ -835,7 +935,7 @@ export default function TournamentDetails() {
                     }}
                     title="Sustituir a un equipo retirado/descalificado en las llaves"
                   >
-                    🔄 ACEPTAR COMO REEMPLAZO
+                    ACEPTAR COMO REEMPLAZO
                   </button>
                 )}
                 <button
@@ -1186,6 +1286,16 @@ export default function TournamentDetails() {
           >
             Llaves (Bracket)
           </button>
+          <button
+            className={`btn ${activeTab === "casters"
+                ? "btn-primary"
+                : "btn-secondary text-muted"
+              }`}
+            style={{ borderRadius: "8px", border: "none", display: "flex", alignItems: "center", gap: "0.4rem" }}
+            onClick={() => setActiveTab("casters")}
+          >
+            <Tv size={16} /> Casters Oficiales ({tournamentCasters.length})
+          </button>
         </div>
 
         {activeTab === "bracket" && (
@@ -1432,6 +1542,374 @@ export default function TournamentDetails() {
             )}
           </>
         )}
+
+        {/* CASTERS TAB */}
+        {activeTab === "casters" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+            {/* Casters Tab Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0, color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <Tv size={22} /> Casters Oficiales del Torneo
+                </h2>
+                <p className="text-muted text-sm" style={{ margin: "0.25rem 0 0" }}>
+                  Transmisiones autorizadas y comentaristas oficiales para este torneo.
+                </p>
+              </div>
+
+              {session?.user && (
+                <div>
+                  {userTournamentApp ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        padding: "0.5rem 1rem",
+                        borderRadius: "8px",
+                        background:
+                          userTournamentApp.status === "approved"
+                            ? "rgba(34, 197, 94, 0.15)"
+                            : userTournamentApp.status === "rejected"
+                            ? "rgba(239, 68, 68, 0.15)"
+                            : "rgba(234, 179, 8, 0.15)",
+                        border: `1px solid ${
+                          userTournamentApp.status === "approved"
+                            ? "rgba(34, 197, 94, 0.3)"
+                            : userTournamentApp.status === "rejected"
+                            ? "rgba(239, 68, 68, 0.3)"
+                            : "rgba(234, 179, 8, 0.3)"
+                        }`,
+                      }}
+                    >
+                      {userTournamentApp.status === "approved" ? (
+                        <CheckCircle2 size={16} color="var(--success)" />
+                      ) : userTournamentApp.status === "rejected" ? (
+                        <AlertCircle size={16} color="var(--danger)" />
+                      ) : (
+                        <Radio size={16} color="var(--warning)" />
+                      )}
+                      <span
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: "bold",
+                          color:
+                            userTournamentApp.status === "approved"
+                              ? "var(--success)"
+                              : userTournamentApp.status === "rejected"
+                              ? "var(--danger)"
+                              : "var(--warning)",
+                        }}
+                      >
+                        {userTournamentApp.status === "approved"
+                          ? "Caster Oficial Aprobado"
+                          : userTournamentApp.status === "rejected"
+                          ? "Solicitud Rechazada"
+                          : "Solicitud en Revisión"}
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => setIsCasterModalOpen(true)}
+                      style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+                    >
+                      <TwitchIcon size={16} /> Postularme como Caster
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Approved Casters Grid */}
+            {tournamentCasters.length === 0 ? (
+              <div
+                className="card"
+                style={{
+                  textAlign: "center",
+                  padding: "3.5rem 2rem",
+                  background: "rgba(0, 0, 0, 0.2)",
+                }}
+              >
+                <Tv size={36} style={{ color: "var(--muted)", margin: "0 auto 1rem" }} />
+                <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.15rem" }}>
+                  Aún no hay casters oficiales registrados para este torneo
+                </h3>
+                <p className="text-muted text-sm" style={{ maxWidth: "450px", margin: "0 auto 1.5rem" }}>
+                  Si eres creador de contenido o comentarista, puedes postularte para transmitir y comentar los partidos de este torneo.
+                </p>
+                {session?.user && !userTournamentApp && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => setIsCasterModalOpen(true)}
+                  >
+                    Enviar Postulación de Caster
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "1.25rem",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                }}
+              >
+                {tournamentCasters.map((c) => (
+                  <div
+                    key={c.id}
+                    className="card"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                      padding: "1.25rem",
+                      background: "rgba(20, 22, 26, 0.7)",
+                      border: "1px solid rgba(145, 70, 255, 0.25)",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                      {c.users?.image ? (
+                        <img
+                          src={c.users.image}
+                          alt={c.alias}
+                          style={{
+                            width: "48px",
+                            height: "48px",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            border: "2px solid #9146FF",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "48px",
+                            height: "48px",
+                            borderRadius: "50%",
+                            background: "rgba(145, 70, 255, 0.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: "bold",
+                            color: "#C499FF",
+                            border: "2px solid #9146FF",
+                          }}
+                        >
+                          {c.alias?.slice(0, 2).toUpperCase() || "CA"}
+                        </div>
+                      )}
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <h4 style={{ margin: 0, fontSize: "1.05rem", fontWeight: "bold" }}>
+                          {c.alias}
+                        </h4>
+                        <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+                          {c.users?.name || "Caster Oficial"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {c.bio && (
+                      <p
+                        className="text-muted text-sm"
+                        style={{
+                          margin: 0,
+                          lineHeight: "1.4",
+                          overflow: "hidden",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
+                        {c.bio}
+                      </p>
+                    )}
+
+                    {/* Languages */}
+                    {c.languages && c.languages.length > 0 && (
+                      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                        {c.languages.map((lang: string, idx: number) => (
+                          <span
+                            key={idx}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "4px",
+                              background: "rgba(255, 255, 255, 0.06)",
+                              color: "var(--muted)",
+                            }}
+                          >
+                            {lang}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Stream Link Button */}
+                    <div style={{ marginTop: "auto", paddingTop: "0.5rem", borderTop: "1px solid var(--border-light)" }}>
+                      {c.twitch_channel && (
+                        <a
+                          href={`https://twitch.tv/${c.twitch_channel}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn text-sm"
+                          style={{
+                            width: "100%",
+                            background: "#9146FF",
+                            color: "#fff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "0.4rem",
+                            padding: "0.5rem",
+                          }}
+                        >
+                          <TwitchIcon size={16} /> Ver Canal en Twitch
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Organizer Review Section for Tournament Applications */}
+            {canManage && tournamentApplications.length > 0 && (
+              <div
+                className="card"
+                style={{
+                  marginTop: "1.5rem",
+                  padding: "1.5rem",
+                  border: "1px solid var(--border-light)",
+                  background: "rgba(0, 0, 0, 0.3)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                  <ShieldCheck size={22} color="var(--primary)" />
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "bold" }}>
+                      Gestión de Solicitudes de Casters del Torneo
+                    </h3>
+                    <p className="text-muted text-sm" style={{ margin: 0 }}>
+                      Revisa y aprueba comentaristas específicos para este torneo.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  {tournamentApplications.map((app) => (
+                    <div
+                      key={app.id}
+                      style={{
+                        padding: "1rem",
+                        borderRadius: "8px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        border: "1px solid var(--border-light)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "1rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: "250px" }}>
+                        <div
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "50%",
+                            background: "rgba(145, 70, 255, 0.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#C499FF",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {app.alias?.slice(0, 2).toUpperCase() || "CA"}
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ fontWeight: "bold", fontSize: "0.95rem" }}>{app.alias}</span>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                padding: "0.1rem 0.4rem",
+                                borderRadius: "4px",
+                                background:
+                                  app.status === "approved"
+                                    ? "rgba(34, 197, 94, 0.2)"
+                                    : app.status === "rejected"
+                                    ? "rgba(239, 68, 68, 0.2)"
+                                    : "rgba(234, 179, 8, 0.2)",
+                                color:
+                                  app.status === "approved"
+                                    ? "var(--success)"
+                                    : app.status === "rejected"
+                                    ? "var(--danger)"
+                                    : "var(--warning)",
+                              }}
+                            >
+                              {app.status === "approved"
+                                ? "Aprobado"
+                                : app.status === "rejected"
+                                ? "Rechazado"
+                                : "Pendiente"}
+                            </span>
+                          </div>
+                          <p className="text-muted text-xs" style={{ margin: "0.2rem 0 0" }}>
+                            Usuario: {app.users?.name || app.users?.email} | Twitch: {app.twitch_channel}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        {app.twitch_channel && (
+                          <a
+                            href={`https://twitch.tv/${app.twitch_channel}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-secondary text-xs"
+                            style={{ display: "flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.6rem" }}
+                          >
+                            <ExternalLink size={12} /> Canal
+                          </a>
+                        )}
+                        {app.status !== "approved" && (
+                          <button
+                            className="btn text-xs"
+                            style={{ background: "rgba(34, 197, 94, 0.2)", color: "var(--success)", border: "1px solid rgba(34, 197, 94, 0.4)", padding: "0.35rem 0.75rem" }}
+                            onClick={() => handleReviewCaster(app.id, "approve")}
+                          >
+                            Aprobar
+                          </button>
+                        )}
+                        {app.status !== "rejected" && (
+                          <button
+                            className="btn text-xs"
+                            style={{ background: "rgba(239, 68, 68, 0.2)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.4)", padding: "0.35rem 0.75rem" }}
+                            onClick={() => handleReviewCaster(app.id, "reject")}
+                          >
+                            Rechazar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       <ConfirmModal
@@ -1456,7 +1934,7 @@ export default function TournamentDetails() {
 
       <ConfirmModal
         isOpen={replaceModal.isOpen}
-        title="🔄 Sustituir Equipo en el Bracket"
+        title="Sustituir Equipo en el Bracket"
         message={
           <div>
             <p className="mb-3">
@@ -1464,7 +1942,7 @@ export default function TournamentDetails() {
             </p>
             {substitutableTeams.length === 0 ? (
               <p className="text-warning text-sm">
-                ⚠️ No hay equipos marcados como retirados o descalificados en este momento.
+                No hay equipos marcados como retirados o descalificados en este momento.
               </p>
             ) : (
               <select
@@ -1490,6 +1968,128 @@ export default function TournamentDetails() {
           setTargetReplaceTeamId("");
         }}
       />
+
+      {/* Caster Postulation Modal */}
+      {isCasterModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+          onClick={() => setIsCasterModalOpen(false)}
+        >
+          <div
+            className="card"
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              padding: "2rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.5rem",
+              background: "#14161A",
+              border: "1px solid var(--border-light)",
+              borderRadius: "12px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Tv size={20} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: "1.25rem" }}>Postulación de Caster</h3>
+              </div>
+              <button className="btn-icon" onClick={() => setIsCasterModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleApplyCaster} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                  Alias de Caster *
+                </label>
+                <input
+                  type="text"
+                  className="input-base"
+                  required
+                  placeholder="ej. CastMaster"
+                  value={casterForm.alias}
+                  onChange={(e) => setCasterForm({ ...casterForm, alias: e.target.value })}
+                  style={{ width: "100%" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                  Canal de Twitch *
+                </label>
+                <input
+                  type="text"
+                  className="input-base"
+                  required
+                  placeholder="ej. nombre_de_usuario o https://twitch.tv/..."
+                  value={casterForm.twitch_channel}
+                  onChange={(e) => setCasterForm({ ...casterForm, twitch_channel: e.target.value })}
+                  style={{ width: "100%" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                  Canal de YouTube (Opcional)
+                </label>
+                <input
+                  type="text"
+                  className="input-base"
+                  placeholder="ej. @miCanal"
+                  value={casterForm.youtube_channel}
+                  onChange={(e) => setCasterForm({ ...casterForm, youtube_channel: e.target.value })}
+                  style={{ width: "100%" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                  Biografía / Experiencia (Opcional)
+                </label>
+                <textarea
+                  className="input-base"
+                  rows={3}
+                  placeholder="Cuéntanos brevemente sobre tu experiencia casteando torneos..."
+                  value={casterForm.bio}
+                  onChange={(e) => setCasterForm({ ...casterForm, bio: e.target.value })}
+                  style={{ width: "100%", resize: "vertical" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsCasterModalOpen(false)}
+                  disabled={isSubmittingCaster}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isSubmittingCaster}
+                >
+                  {isSubmittingCaster ? "Enviando..." : "Enviar Solicitud"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <ConfirmModal
         isOpen={bracketConfirmModal.isOpen}

@@ -235,11 +235,211 @@ export type Database = {
           },
         ]
       }
+      caster_applications: {
+        Row: {
+          id: string
+          user_id: string
+          alias: string
+          bio: string | null
+          twitch_channel: string | null
+          youtube_channel: string | null
+          languages: string[] | null
+          status: string
+          reviewer_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          alias: string
+          bio?: string | null
+          twitch_channel?: string | null
+          youtube_channel?: string | null
+          languages?: string[] | null
+          status?: string
+          reviewer_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          alias?: string
+          bio?: string | null
+          twitch_channel?: string | null
+          youtube_channel?: string | null
+          languages?: string[] | null
+          status?: string
+          reviewer_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caster_applications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      casters: {
+        Row: {
+          id: string
+          user_id: string
+          alias: string
+          bio: string | null
+          avatar_url: string | null
+          twitch_channel: string | null
+          youtube_channel: string | null
+          is_live: boolean | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          alias: string
+          bio?: string | null
+          avatar_url?: string | null
+          twitch_channel?: string | null
+          youtube_channel?: string | null
+          is_live?: boolean | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          alias?: string
+          bio?: string | null
+          avatar_url?: string | null
+          twitch_channel?: string | null
+          youtube_channel?: string | null
+          is_live?: boolean | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "casters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_casters: {
+        Row: {
+          id: string
+          match_id: string
+          caster_id: string
+          stream_url: string | null
+          is_primary: boolean | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          match_id: string
+          caster_id: string
+          stream_url?: string | null
+          is_primary?: boolean | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          match_id?: string
+          caster_id?: string
+          stream_url?: string | null
+          is_primary?: boolean | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_casters_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_casters_caster_id_fkey"
+            columns: ["caster_id"]
+            isOneToOne: false
+            referencedRelation: "casters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournament_casters: {
+        Row: {
+          id: string
+          tournament_id: string
+          user_id: string
+          alias: string
+          bio: string | null
+          twitch_channel: string | null
+          youtube_channel: string | null
+          languages: string[] | null
+          status: string
+          reviewer_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          user_id: string
+          alias: string
+          bio?: string | null
+          twitch_channel?: string | null
+          youtube_channel?: string | null
+          languages?: string[] | null
+          status?: string
+          reviewer_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tournament_id?: string
+          user_id?: string
+          alias?: string
+          bio?: string | null
+          twitch_channel?: string | null
+          youtube_channel?: string | null
+          languages?: string[] | null
+          status?: string
+          reviewer_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_casters_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_casters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_vetoes: {
         Row: {
           created_at: string | null
           format: string
           id: string
+          match_id: string | null
           state: Json
           team_a_id: string | null
           team_a_token: string
@@ -251,6 +451,7 @@ export type Database = {
           created_at?: string | null
           format: string
           id?: string
+          match_id?: string | null
           state?: Json
           team_a_id?: string | null
           team_a_token: string
@@ -262,6 +463,7 @@ export type Database = {
           created_at?: string | null
           format?: string
           id?: string
+          match_id?: string | null
           state?: Json
           team_a_id?: string | null
           team_a_token?: string
@@ -314,6 +516,9 @@ export type Database = {
           tournament_id: string | null
           updated_at: string | null
           winner_id: string | null
+          scheduled_at: string | null
+          selected_maps: string[] | null
+          map_veto_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -335,6 +540,9 @@ export type Database = {
           tournament_id?: string | null
           updated_at?: string | null
           winner_id?: string | null
+          scheduled_at?: string | null
+          selected_maps?: string[] | null
+          map_veto_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -356,6 +564,9 @@ export type Database = {
           tournament_id?: string | null
           updated_at?: string | null
           winner_id?: string | null
+          scheduled_at?: string | null
+          selected_maps?: string[] | null
+          map_veto_id?: string | null
         }
         Relationships: [
           {
