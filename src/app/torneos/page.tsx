@@ -1,16 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import LoginButton from "@/components/LoginButton";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "@/components/ConfirmModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   Copy,
-  Link as LinkIcon,
-  CheckCircle,
   Trophy,
   Settings,
   Users,
@@ -32,8 +31,6 @@ export default function TorneosDashboard() {
   const [searchExplore, setSearchExplore] = useState("");
   const [searchTournaments, setSearchTournaments] = useState("");
   const [searchRegistrations, setSearchRegistrations] = useState("");
-  const [hasSteamLinked, setHasSteamLinked] = useState(cachedDashboardData?.hasSteamLinked || false);
-  const [hasDiscordLinked, setHasDiscordLinked] = useState(cachedDashboardData?.hasDiscordLinked || false);
   const [isLoading, setIsLoading] = useState(!cachedDashboardData);
   const router = useRouter();
 
@@ -48,23 +45,6 @@ export default function TorneosDashboard() {
 
   const fetchData = async () => {
     if (!cachedDashboardData) setIsLoading(true);
-
-    // Check if Steam is linked
-    let accountData = null;
-    try {
-      const res = await fetch("/api/user/accounts");
-      accountData = await res.json();
-      if (accountData.accounts) {
-        setHasSteamLinked(
-          accountData.accounts.some((acc: any) => acc.provider === "steam")
-        );
-        setHasDiscordLinked(
-          accountData.accounts.some((acc: any) => acc.provider === "discord")
-        );
-      }
-    } catch (e) {
-      console.error("Error fetching accounts:", e);
-    }
 
     // Fetch Tournaments (created)
     const { data: createdTournaments, error: error1 } = await supabase
@@ -131,8 +111,6 @@ export default function TorneosDashboard() {
       tournaments: uniqueTournaments,
       myTeams: teamsData || [],
       publicTournaments: publicTData ? publicTData.filter((t: any) => !(t.template_json as any)?.isPrivate) : [],
-      hasSteamLinked: accountData?.accounts?.some((acc: any) => acc.provider === "steam") || false,
-      hasDiscordLinked: accountData?.accounts?.some((acc: any) => acc.provider === "discord") || false
     };
 
     setIsLoading(false);
@@ -145,7 +123,7 @@ export default function TorneosDashboard() {
     }
   };
 
-  if (status === "loading" || isLoading) {
+  if ((status === "loading" || isLoading) && !cachedDashboardData) {
     return (
       <LoadingSpinner text="Cargando Panel..." fullHeight={true} />
     );
@@ -222,65 +200,18 @@ export default function TorneosDashboard() {
           </div>
 
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            {hasSteamLinked ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  color: "var(--success)",
-                  background: "rgba(34, 197, 94, 0.1)",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "8px"
-                }}
-              >
-                <CheckCircle size={18} />
-                <span className="text-sm font-bold">Steam Vinculado</span>
-              </div>
-            ) : (
-              <button
-                className="btn btn-secondary text-sm"
-                onClick={() => signIn("steam")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.5rem 1rem"
-                }}
-              >
-                <LinkIcon size={16} /> Vincular Steam
-              </button>
-            )}
-
-            {hasDiscordLinked ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  color: "#5865F2",
-                  background: "rgba(88, 101, 242, 0.1)",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "8px"
-                }}
-              >
-                <CheckCircle size={18} />
-                <span className="text-sm font-bold">Discord Vinculado</span>
-              </div>
-            ) : (
-              <button
-                className="btn btn-secondary text-sm"
-                onClick={() => signIn("discord")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.5rem 1rem"
-                }}
-              >
-                <LinkIcon size={16} /> Vincular Discord
-              </button>
-            )}
+            <button
+              className="btn btn-secondary text-sm"
+              onClick={() => router.push("/settings")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.6rem 1.2rem",
+              }}
+            >
+              <Settings size={16} /> Ajustes de Cuenta
+            </button>
           </div>
         </div>
 
@@ -602,14 +533,7 @@ export default function TorneosDashboard() {
                 </p>
               </div>
             ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gap: "1rem",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(300px, 1fr))",
-                }}
-              >
+              <div className="my-registrations-grid">
                 {myTeams.filter((t: any) => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).map((team: any) => {
                   const isPending = team.status === "pending";
                   const isAccepted = team.status === "accepted";
@@ -624,30 +548,36 @@ export default function TorneosDashboard() {
                         flexDirection: "column",
                         gap: "1rem",
                         position: "relative",
+                        height: "100%",
                       }}
                     >
                       <div
                         style={{
                           display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                          flexWrap: "wrap",
+                          minHeight: "2.2rem",
                         }}
                       >
                         <h3
                           style={{
                             margin: 0,
-                            paddingRight: "1rem",
                             wordBreak: "break-word",
+                            color: "var(--text-main)",
+                            fontSize: "1.15rem",
+                            lineHeight: "1.3",
                           }}
+                          title={team.name}
                         >
                           {team.name}
                         </h3>
                         {/* Badge Status */}
                         <span
                           style={{
-                            padding: "0.25rem 0.75rem",
+                            padding: "0.2rem 0.65rem",
                             borderRadius: "100px",
-                            fontSize: "0.8rem",
+                            fontSize: "0.75rem",
                             fontWeight: "bold",
                             background: isAccepted
                               ? "rgba(74, 222, 128, 0.1)"
@@ -657,31 +587,32 @@ export default function TorneosDashboard() {
                               : "var(--warning)",
                             border: `1px solid ${isAccepted ? "var(--success)" : "var(--warning)"
                               }`,
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
                           }}
                         >
                           {isAccepted ? "Aceptado" : "Pendiente"}
                         </span>
                       </div>
 
-                      <div
+                      <Link
+                        href={`/tournament/${team.tournament_id}`}
+                        className="tournament-link-badge"
                         style={{
                           background: "rgba(255, 255, 255, 0.03)",
-                          border: "1px solid rgba(255, 255, 255, 0.05)",
+                          border: "1px solid rgba(255, 255, 255, 0.08)",
                           borderRadius: "8px",
                           padding: "0.75rem",
                           display: "flex",
                           alignItems: "center",
                           gap: "0.75rem",
-                          transition: "background 0.2s ease",
+                          height: "56px",
+                          boxSizing: "border-box",
+                          textDecoration: "none",
+                          color: "inherit",
+                          cursor: "pointer",
                         }}
-                        onMouseOver={(e) =>
-                        (e.currentTarget.style.background =
-                          "rgba(255, 255, 255, 0.06)")
-                        }
-                        onMouseOut={(e) =>
-                        (e.currentTarget.style.background =
-                          "rgba(255, 255, 255, 0.03)")
-                        }
+                        title={`Ir al torneo: ${team.tournaments?.name || ""}`}
                       >
                         <div
                           style={{
@@ -693,7 +624,8 @@ export default function TorneosDashboard() {
                             alignItems: "center",
                             justifyContent: "center",
                             width: "32px",
-                            height: "32px"
+                            height: "32px",
+                            flexShrink: 0,
                           }}
                         >
                           {(team.tournaments?.logo_url || team.tournaments?.template_json?.logo_url) ? (
@@ -703,9 +635,9 @@ export default function TorneosDashboard() {
                           )}
                         </div>
                         <div
-                          style={{ display: "flex", flexDirection: "column" }}
+                          style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}
                         >
-                          <span className="text-xs text-muted">
+                          <span className="text-xs text-muted" style={{ textDecoration: "none", lineHeight: 1.2 }}>
                             Torneo Inscrito
                           </span>
                           <span
@@ -713,12 +645,17 @@ export default function TorneosDashboard() {
                               fontWeight: "bold",
                               color: "var(--text-main)",
                               fontSize: "0.95rem",
+                              textDecoration: "none",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              lineHeight: 1.3,
                             }}
                           >
                             {team.tournaments?.name || "Desconocido"}
                           </span>
                         </div>
-                      </div>
+                      </Link>
 
                       {isLocked && (
                         <p
@@ -734,25 +671,18 @@ export default function TorneosDashboard() {
                           marginTop: "auto",
                           display: "flex",
                           gap: "0.5rem",
+                          paddingTop: "0.25rem",
                         }}
                       >
                         <button
-                          className="btn btn-primary"
-                          style={{ flex: 1 }}
-                          onClick={() =>
-                            router.push(`/tournament/${team.tournament_id}`)
-                          }
-                        >
-                          Ver Torneo
-                        </button>
-                        <button
+                          type="button"
                           className="btn btn-secondary"
-                          style={{ flex: 1 }}
-                          onClick={() =>
+                          style={{ width: "100%", textDecoration: "none" }}
+                          onClick={() => {
                             router.push(
                               `/tournament/${team.tournament_id}/team/${team.id}`
-                            )
-                          }
+                            );
+                          }}
                         >
                           Ver Equipo
                         </button>

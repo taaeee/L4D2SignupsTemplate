@@ -18,6 +18,7 @@ type Match = Database['public']['Tables']['matches']['Row'];
 
 interface Tournament {
   id: string | number;
+  status?: string;
   template_json?: {
     currentSwissRound?: number;
     swissRounds?: number;
@@ -40,6 +41,52 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
   const [selectedTeam1, setSelectedTeam1] = useState<Team | null>(null);
   const [selectedTeam2, setSelectedTeam2] = useState<Team | null>(null);
   const [isSavingScore, setIsSavingScore] = useState(false);
+
+  // Drag and drop matchup adjustment state (active only before tournament lock)
+  const isDndActive = Boolean(canManage && tournament?.status !== 'locked');
+  const [draggedSlot, setDraggedSlot] = useState<{ matchId: string; slot: 1 | 2; teamId: string } | null>(null);
+
+  const handleSlotDragStart = (matchId: string, slot: 1 | 2, teamId: string) => {
+    setDraggedSlot({ matchId, slot, teamId });
+  };
+
+  const handleSlotDrop = async (targetMatchId: string, targetSlot: 1 | 2) => {
+    if (!draggedSlot) return;
+    if (draggedSlot.matchId === targetMatchId && draggedSlot.slot === targetSlot) {
+      setDraggedSlot(null);
+      return;
+    }
+
+    const { matchId: sourceMatchId, slot: sourceSlot } = draggedSlot;
+    setDraggedSlot(null);
+
+    const toastId = toast.loading("Actualizando emparejamiento...");
+
+    try {
+      const res = await fetch(`/api/tournament/${tournament.id}/bracket/swap-slots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceMatchId,
+          sourceSlot,
+          targetMatchId,
+          targetSlot,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error al actualizar enfrentamientos");
+      }
+
+      toast.success("Emparejamientos actualizados", { id: toastId });
+      onMatchUpdated();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al reordenar enfrentamientos", { id: toastId });
+      onMatchUpdated();
+    }
+  };
 
   const currentRound = tournament?.template_json?.currentSwissRound || 1;
   const totalRounds = tournament?.template_json?.swissRounds || 1;
@@ -214,6 +261,31 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
         )}
       </div>
 
+      {isDndActive && (
+        <div
+          style={{
+            background: 'rgba(111, 175, 58, 0.08)',
+            border: '1px solid rgba(111, 175, 58, 0.25)',
+            borderRadius: '8px',
+            padding: '0.75rem 1rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            color: 'var(--text-main)',
+            fontSize: '0.85rem',
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }}>🔀</span>
+          <div>
+            <strong style={{ color: 'var(--primary)' }}>Ajuste de emparejamientos activo:</strong>{' '}
+            <span className="text-muted">
+              Arrastra y suelta los equipos de la Ronda 1 para reorganizar los cruces iniciales antes de cerrar el torneo.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: "12px", border: "1px solid var(--border)", padding: "1.5rem" }}>
         {activeTab === "matches" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "3rem" }}>
@@ -230,6 +302,9 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
                       teamMap={teamMap}
                       canManage={canManage}
                       onClick={handleMatchClick}
+                      isDndEnabled={isDndActive && m.round === 1}
+                      onSlotDragStart={handleSlotDragStart}
+                      onSlotDrop={handleSlotDrop}
                     />
                   ))}
                 </div>

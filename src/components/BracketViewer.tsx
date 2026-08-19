@@ -1,29 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+"use client";
+
+import React, { useState, useRef, useEffect } from 'react';
 import MatchCard from './MatchCard';
 import ScoreModal from './ScoreModal';
-import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-
-import { Database } from '@/lib/database.types';
-
-type Match = Database['public']['Tables']['matches']['Row'];
+import { toast } from 'sonner';
+import { Layers, X, Check, Search } from 'lucide-react';
 
 interface Team {
   id: string;
   name: string;
-  status?: string;
   logo_url?: string;
+  status?: string;
 }
 
-interface Tournament {
-  id: string;
-  tournament_format?: string;
-  template_json?: {
-    tournamentFormat?: string;
-    round_metadata?: Record<string, string>;
-    [key: string]: any;
-  };
-}
+import { Database } from '@/lib/database.types';
+
+type Match = Database['public']['Tables']['matches']['Row'];
+type Tournament = Database['public']['Tables']['tournaments']['Row'];
 
 interface BracketViewerProps {
   matches: Match[];
@@ -33,12 +27,42 @@ interface BracketViewerProps {
   tournament: Tournament;
 }
 
+export interface RoundMetaObj {
+  format: string; // 'bo1' | 'to2' | 'bo3' | 'bo5'
+  formatLabel: string;
+  maps: string[];
+}
+
+let cachedAppMaps: any[] | null = null;
+
 export default function BracketViewer({ matches, teams, canManage, onMatchUpdated, tournament }: BracketViewerProps) {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [selectedTeam1, setSelectedTeam1] = useState<Team | null>(null);
   const [selectedTeam2, setSelectedTeam2] = useState<Team | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [roundMetas, setRoundMetas] = useState<Record<string, string>>(tournament?.template_json?.round_metadata || {});
+  const [roundMetas, setRoundMetas] = useState<Record<string, any>>(
+    (tournament?.template_json as any)?.round_metadata || {}
+  );
+
+  // Dynamic maps from /api/maps (official + custom)
+  const [availableMaps, setAvailableMaps] = useState<any[]>(cachedAppMaps || []);
+  const [mapFilter, setMapFilter] = useState<'all' | 'official' | 'custom'>('all');
+  const [searchMap, setSearchMap] = useState('');
+
+  // Map Pool Modal State
+  const [mapPoolModal, setMapPoolModal] = useState<{
+    isOpen: boolean;
+    roundKey: string;
+    roundTitle: string;
+    selectedMaps: string[];
+    customMapInput: string;
+  }>({
+    isOpen: false,
+    roundKey: '',
+    roundTitle: '',
+    selectedMaps: [],
+    customMapInput: ''
+  });
 
   // Drag to scroll state
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -48,35 +72,190 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
   const [scrollLeft, setScrollLeft] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
 
+  // Drag and drop matchup adjustment state (active only before tournament lock)
+  const isDndActive = Boolean(canManage && tournament?.status !== 'locked');
+  const [draggedSlot, setDraggedSlot] = useState<{ matchId: string; slot: 1 | 2; teamId: string } | null>(null);
+
+  const handleSlotDragStart = (matchId: string, slot: 1 | 2, teamId: string) => {
+    setDraggedSlot({ matchId, slot, teamId });
+  };
+
+  const handleSlotDrop = async (targetMatchId: string, targetSlot: 1 | 2) => {
+    if (!draggedSlot) return;
+    if (draggedSlot.matchId === targetMatchId && draggedSlot.slot === targetSlot) {
+      setDraggedSlot(null);
+      return;
+    }
+
+    const { matchId: sourceMatchId, slot: sourceSlot } = draggedSlot;
+    setDraggedSlot(null);
+
+    const toastId = toast.loading("Actualizando emparejamiento...");
+
+    try {
+      const res = await fetch(`/api/tournament/${tournament.id}/bracket/swap-slots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceMatchId,
+          sourceSlot,
+          targetMatchId,
+          targetSlot,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error al actualizar enfrentamientos");
+      }
+
+      toast.success("Emparejamientos actualizados", { id: toastId });
+      onMatchUpdated();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al reordenar enfrentamientos", { id: toastId });
+      onMatchUpdated();
+    }
+  };
+
   useEffect(() => {
-    if (tournament?.template_json?.round_metadata) {
-      setRoundMetas(tournament.template_json.round_metadata);
+    if ((tournament?.template_json as any)?.round_metadata) {
+      setRoundMetas((tournament.template_json as any).round_metadata);
     }
   }, [tournament]);
 
-  const handleMetaBlur = async (roundKey: string) => {
+  useEffect(() => {
+    if (!cachedAppMaps) {
+      fetch('/api/maps')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.all) {
+            const sorted = data.all.sort((a: any, b: any) =>
+              a.name.localeCompare(b.name)
+            );
+            cachedAppMaps = sorted;
+            setAvailableMaps(sorted);
+          }
+        })
+        .catch((err) =>
+          console.error("Error fetching maps for bracket viewer:", err)
+        );
+    }
+  }, []);
+
+  // Helper to parse round metadata
+  const getRoundMeta = (roundKey: string): RoundMetaObj => {
+    const raw = roundMetas[roundKey];
+    if (!raw) {
+      return { format: 'bo1', formatLabel: '1 Map', maps: [] };
+    }
+    if (typeof raw === 'string') {
+      const lower = raw.toLowerCase();
+      if (lower.includes('bo3') || lower.includes('3')) {
+        return { format: 'bo3', formatLabel: 'BO3', maps: [] };
+      }
+      if (lower.includes('bo5') || lower.includes('5')) {
+        return { format: 'bo5', formatLabel: 'BO5', maps: [] };
+      }
+      if (lower.includes('bo2') || lower.includes('to2') || lower.includes('2')) {
+        return { format: 'to2', formatLabel: 'BO2', maps: [] };
+      }
+      return { format: 'bo1', formatLabel: raw || '1 Map', maps: [] };
+    }
+    return {
+      format: raw.format || 'bo1',
+      formatLabel:
+        raw.formatLabel ||
+        (raw.format === 'bo3'
+          ? 'BO3'
+          : raw.format === 'bo5'
+          ? 'BO5'
+          : raw.format === 'to2'
+          ? 'BO2'
+          : '1 Map'),
+      maps: Array.isArray(raw.maps) ? raw.maps : []
+    };
+  };
+
+  // Save updated round metadata to Supabase
+  const saveRoundMeta = async (updatedMetas: Record<string, any>) => {
     if (!canManage || !tournament) return;
-    const currentMeta = tournament.template_json?.round_metadata || {};
-    if (currentMeta[roundKey] === roundMetas[roundKey]) return;
+    setRoundMetas(updatedMetas);
 
     const newJson = {
-      ...tournament.template_json,
-      round_metadata: roundMetas
+      ...((tournament.template_json as any) || {}),
+      round_metadata: updatedMetas
     };
 
-    const { error } = await supabase.from('tournaments').update({ template_json: newJson }).eq('id', tournament.id);
+    const { error } = await supabase
+      .from('tournaments')
+      .update({ template_json: newJson })
+      .eq('id', tournament.id);
+
     if (error) {
       toast.error("Error al guardar formato de ronda");
+    } else {
+      toast.success("Formato y pool de mapas guardados");
     }
+  };
+
+  // Change format dropdown
+  const handleFormatChange = (roundKey: string, newFormat: string) => {
+    const current = getRoundMeta(roundKey);
+    const formatLabels: Record<string, string> = {
+      bo1: '1 Map',
+      to2: 'BO2',
+      bo3: 'BO3',
+      bo5: 'BO5'
+    };
+
+    const updated = {
+      ...roundMetas,
+      [roundKey]: {
+        ...current,
+        format: newFormat,
+        formatLabel: formatLabels[newFormat] || '1 Map'
+      }
+    };
+
+    saveRoundMeta(updated);
+  };
+
+  // Open Map Pool Modal
+  const handleOpenMapPool = (roundKey: string, roundTitle: string) => {
+    const current = getRoundMeta(roundKey);
+    setMapPoolModal({
+      isOpen: true,
+      roundKey,
+      roundTitle,
+      selectedMaps: [...current.maps],
+      customMapInput: ''
+    });
+    setSearchMap('');
+    setMapFilter('all');
+  };
+
+  // Save Map Pool from Modal
+  const handleSaveMapPool = () => {
+    const current = getRoundMeta(mapPoolModal.roundKey);
+    const updated = {
+      ...roundMetas,
+      [mapPoolModal.roundKey]: {
+        ...current,
+        maps: mapPoolModal.selectedMaps
+      }
+    };
+
+    saveRoundMeta(updated);
+    setMapPoolModal((prev) => ({ ...prev, isOpen: false }));
   };
 
   // Separate matches by bracket
   const ubRounds: Record<number, Match[]> = {};
   const lbRounds: Record<number, Match[]> = {};
 
-  matches.forEach(m => {
-    // Hide pure byes visually
-    if (m.is_bye) return; 
+  matches.forEach((m) => {
+    if (m.is_bye) return;
 
     if (m.is_upper) {
       if (!ubRounds[m.round]) ubRounds[m.round] = [];
@@ -87,52 +266,66 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
     }
   });
 
-  Object.keys(ubRounds).forEach(r => ubRounds[r as unknown as number].sort((a, b) => a.match_order - b.match_order));
-  Object.keys(lbRounds).forEach(r => lbRounds[r as unknown as number].sort((a, b) => a.match_order - b.match_order));
+  Object.keys(ubRounds).forEach((r) =>
+    ubRounds[r as unknown as number].sort((a, b) => a.match_order - b.match_order)
+  );
+  Object.keys(lbRounds).forEach((r) =>
+    lbRounds[r as unknown as number].sort((a, b) => a.match_order - b.match_order)
+  );
 
   const ubRoundKeys = Object.keys(ubRounds).map(Number).sort((a, b) => a - b);
   const lbRoundKeys = Object.keys(lbRounds).map(Number).sort((a, b) => a - b);
-  
-  // Assign match numbers
-  let matchCounter = 1;
+
+  // Compute match sequence numbers and dependencies (feeders)
   const matchNumbers: Record<string, number> = {};
-  // Sort all matches globally to assign numbers sequentially like Challonge
+  let matchCounter = 1;
+
   const sortedMatches = [...matches].sort((a, b) => {
     if (a.is_upper !== b.is_upper) return a.is_upper ? -1 : 1;
     if (a.round !== b.round) return a.round - b.round;
     return a.match_order - b.match_order;
   });
-  sortedMatches.forEach(m => {
+  sortedMatches.forEach((m) => {
     if (!m.is_bye) {
       matchNumbers[m.id] = matchCounter++;
     }
   });
 
-  const feeders: Record<string, any[]> = {}; // targetMatchId -> array of objects
-  sortedMatches.forEach(m => {
+  const feeders: Record<string, any[]> = {};
+  sortedMatches.forEach((m) => {
     const num = matchNumbers[m.id];
     if (m.next_match_id) {
       if (!feeders[m.next_match_id]) feeders[m.next_match_id] = [];
-      feeders[m.next_match_id].push({ id: m.id, type: 'winner', label: null, isBye: m.is_bye });
+      feeders[m.next_match_id].push({
+        id: m.id,
+        type: 'winner',
+        label: null,
+        isBye: m.is_bye,
+      });
     }
     if (m.loser_match_id) {
       if (!feeders[m.loser_match_id]) feeders[m.loser_match_id] = [];
-      feeders[m.loser_match_id].push({ id: m.id, type: 'loser', label: num ? `Perdedor de M${num}` : `Perdedor anterior`, isBye: m.is_bye });
+      feeders[m.loser_match_id].push({
+        id: m.id,
+        type: 'loser',
+        label: num ? `Perdedor de M${num}` : `Perdedor anterior`,
+        isBye: m.is_bye,
+      });
     }
   });
 
-  // Resolve byes: if a match is a bye, pass its real feeder's label forward
-  sortedMatches.forEach(m => {
+  // Resolve byes
+  sortedMatches.forEach((m) => {
     if (m.is_bye) {
       const myFeeders = feeders[m.id] || [];
-      const realFeeder = myFeeders.find(f => !f.isBye);
+      const realFeeder = myFeeders.find((f) => !f.isBye);
       if (m.next_match_id && realFeeder) {
         const targetFeeders = feeders[m.next_match_id];
         if (targetFeeders) {
-          const idx = targetFeeders.findIndex(f => f.id === m.id);
+          const idx = targetFeeders.findIndex((f) => f.id === m.id);
           if (idx !== -1) {
             targetFeeders[idx].label = realFeeder.label;
-            targetFeeders[idx].isBye = false; // Resolved
+            targetFeeders[idx].isBye = false;
             targetFeeders[idx].id = realFeeder.id;
             targetFeeders[idx].type = realFeeder.type;
           }
@@ -142,14 +335,14 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
   });
 
   const finalFeeders: Record<string, any> = {};
-  sortedMatches.forEach(m => {
+  sortedMatches.forEach((m) => {
     const myFeeders = feeders[m.id] || [];
     let pending1 = null;
     let pending2 = null;
 
     const isConsumedBy = (feeder: any, teamId?: string) => {
       if (!teamId || !feeder) return false;
-      const sourceMatch = sortedMatches.find(sm => sm.id === feeder.id);
+      const sourceMatch = sortedMatches.find((sm) => sm.id === feeder.id);
       if (!sourceMatch) return false;
       if (feeder.type === 'winner' && sourceMatch.winner_id === teamId) return true;
       if (feeder.type === 'loser' && sourceMatch.loser_id === teamId) return true;
@@ -165,12 +358,12 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
     if (m.team1_id) {
       if (f1 && isConsumedBy(f1, m.team1_id)) t1Feeder = f1;
       else if (f2 && isConsumedBy(f2, m.team1_id)) t1Feeder = f2;
-      else t1Feeder = f1; // fallback
+      else t1Feeder = f1;
     }
     if (m.team2_id) {
       if (f1 && f1 !== t1Feeder && isConsumedBy(f1, m.team2_id)) t2Feeder = f1;
       else if (f2 && f2 !== t1Feeder && isConsumedBy(f2, m.team2_id)) t2Feeder = f2;
-      else t2Feeder = f1 !== t1Feeder ? f1 : f2; // fallback
+      else t2Feeder = f1 !== t1Feeder ? f1 : f2;
     }
 
     if (!m.team1_id) {
@@ -190,7 +383,7 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
   const lbM1 = lbRounds[lbRoundKeys[0]]?.length || 1;
 
   const teamMap: Record<string, Team> = {};
-  teams.forEach(t => teamMap[t.id] = t);
+  teams.forEach((t) => (teamMap[t.id] = t));
 
   const handleMatchClick = (match: Match, t1: Team | null, t2: Team | null) => {
     if (!match.team1_id || !match.team2_id) {
@@ -204,115 +397,297 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
     setSelectedTeam2(t2);
   };
 
-  const handleSaveScore = async (data: any) => {
+  const handleSaveScore = async ({
+    score1,
+    score2,
+    winner_id,
+  }: {
+    score1: number;
+    score2: number;
+    winner_id: string;
+  }) => {
+    if (!selectedMatch) return;
     setIsSaving(true);
+
     try {
-      if (!selectedMatch) return;
       const res = await fetch(`/api/matches/${selectedMatch.id}/report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ score1, score2, winner_id }),
       });
-      const result = await res.json();
-      
-      if (!res.ok) throw new Error(result.error || 'Error al guardar');
-      
-      toast.success("Resultado guardado correctamente.");
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Error al actualizar marcador");
+      }
+
+      toast.success("Marcador guardado exitosamente");
       setSelectedMatch(null);
-      if (onMatchUpdated) onMatchUpdated();
-    } catch (e: any) {
-      toast.error(e.message);
+      onMatchUpdated();
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const renderBracketSection = (roundKeys: number[], roundsMap: Record<number, Match[]>, m1Count: number, title: string | null) => {
+  const renderBracketSection = (
+    roundKeys: number[],
+    roundsMap: Record<number, Match[]>,
+    m1Count: number,
+    title?: string | null
+  ) => {
     if (roundKeys.length === 0) return null;
+
     return (
-      <div style={{ marginBottom: '4rem' }}>
-        {title && <h2 style={{ color: 'var(--primary)', marginBottom: '2rem' }}>{title}</h2>}
-        <div style={{
-          display: 'flex',
-          gap: '4rem',
-          minWidth: 'max-content',
-          alignItems: 'stretch'
-        }}>
+      <div style={{ marginBottom: '3rem' }}>
+        {title && (
+          <h2
+            style={{
+              fontSize: '1.25rem',
+              color: 'var(--primary)',
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              marginBottom: '1.5rem',
+              borderBottom: '1px solid var(--border-light)',
+              paddingBottom: '0.5rem',
+            }}
+          >
+            {title}
+          </h2>
+        )}
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '4rem',
+            alignItems: 'stretch',
+            position: 'relative',
+          }}
+        >
           {roundKeys.map((roundIndex, i) => {
-            const verticalLineHeight = i > 0 ? (100 * Math.pow(2, i - 1)) / m1Count : 0;
-            
+            const verticalLineHeight =
+              i > 0 ? (100 * Math.pow(2, i - 1)) / m1Count : 0;
+            const roundKey = `${title || 'null'}-${roundIndex}`;
+            const roundTitle = roundsMap[roundIndex][0]?.is_grand_final
+              ? 'Gran Final'
+              : `Ronda ${roundIndex}`;
+            const meta = getRoundMeta(roundKey);
+
             return (
-              <div key={`round-${roundIndex}`} style={{
-                display: 'flex',
-                flexDirection: 'column',
-                width: '250px',
-                position: 'relative'
-              }}>
-                <h3 style={{ 
-                  textAlign: 'center', margin: 0, paddingBottom: '0.5rem', 
-                  color: 'var(--muted)', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '2px',
-                  borderBottom: '1px solid rgba(255,255,255,0.1)',
-                  height: '30px',
-                  flexShrink: 0
-                }}>
-                  {roundsMap[roundIndex][0]?.is_grand_final ? 'Gran Final' : `Ronda ${roundIndex}`}
-                </h3>
-                
-                {canManage ? (
-                  <input 
-                    type="text" 
-                    value={roundMetas[`${title}-${roundIndex}`] !== undefined ? roundMetas[`${title}-${roundIndex}`] : '1 Map'}
-                    onChange={e => setRoundMetas({...roundMetas, [`${title}-${roundIndex}`]: e.target.value})}
-                    onBlur={() => handleMetaBlur(`${title}-${roundIndex}`)}
-                    placeholder="1 Map"
-                    style={{ background: 'transparent', border: 'none', color: 'var(--primary)', textAlign: 'center', width: '100%', fontSize: '0.8rem', marginBottom: '1rem', outline: 'none' }}
-                  />
-                ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--primary)', fontSize: '0.8rem', marginBottom: '1rem', minHeight: '1.2rem' }}>
-                    {roundMetas[`${title}-${roundIndex}`] || '1 Map'}
-                  </div>
-                )}
-                
-                <div style={{
-                  flex: 1,
+              <div
+                key={`round-${roundIndex}`}
+                style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'space-around',
-                  position: 'relative'
-                }}>
-                  {roundsMap[roundIndex].map((match, j) => (
-                    <div key={match.id} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      {i > 0 && (
-                        <div style={{
-                          position: 'absolute', left: '-2rem', width: '2rem', height: '2px',
-                          background: 'var(--border-light)', top: '50%', transform: 'translateY(-50%)', zIndex: 0
-                        }} />
+                  width: '260px',
+                  position: 'relative',
+                }}
+              >
+                {/* Round Header */}
+                <div
+                  style={{
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    paddingBottom: '0.5rem',
+                    marginBottom: '1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.4rem',
+                    alignItems: 'center',
+                  }}
+                >
+                  <h3
+                    style={{
+                      textAlign: 'center',
+                      margin: 0,
+                      color: 'var(--muted)',
+                      fontSize: '0.95rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '2px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {roundTitle}
+                  </h3>
+
+                  {/* Format & Map Pool Controls */}
+                  {canManage ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '0.4rem',
+                        width: '100%',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {/* Format Dropdown */}
+                      <select
+                        className="input-base text-xs"
+                        value={meta.format}
+                        onChange={(e) => handleFormatChange(roundKey, e.target.value)}
+                        style={{
+                          padding: '0.2rem 0.4rem',
+                          background: 'rgba(0,0,0,0.4)',
+                          color: 'var(--primary)',
+                          border: '1px solid var(--border-light)',
+                          borderRadius: '4px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                        }}
+                        title="Selecciona la cantidad de mapas a jugar en esta ronda"
+                      >
+                        <option value="bo1">1 Map</option>
+                        <option value="to2">BO2</option>
+                        <option value="bo3">BO3</option>
+                        <option value="bo5">BO5</option>
+                      </select>
+
+                      {/* Map Pool Button */}
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs"
+                        style={{
+                          padding: '0.2rem 0.5rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          background:
+                            meta.maps.length > 0
+                              ? 'rgba(111, 175, 58, 0.15)'
+                              : 'rgba(255,255,255,0.05)',
+                          borderColor:
+                            meta.maps.length > 0
+                              ? 'var(--primary)'
+                              : 'var(--border-light)',
+                          color:
+                            meta.maps.length > 0 ? 'var(--primary)' : 'var(--muted)',
+                        }}
+                        onClick={() => handleOpenMapPool(roundKey, roundTitle)}
+                        title="Configurar el pool de mapas (oficiales y custom) para esta ronda"
+                      >
+                        <Layers size={12} />
+                        {meta.maps.length > 0 ? `${meta.maps.length} Mapas` : 'Pool'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '0.4rem',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold',
+                          color: 'var(--primary)',
+                          padding: '0.1rem 0.4rem',
+                          background: 'rgba(111, 175, 58, 0.1)',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(111, 175, 58, 0.2)',
+                        }}
+                      >
+                        {meta.formatLabel}
+                      </span>
+                      {meta.maps.length > 0 && (
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            color: 'var(--muted)',
+                            background: 'rgba(255,255,255,0.05)',
+                            padding: '0.1rem 0.4rem',
+                            borderRadius: '4px',
+                          }}
+                          title={`Mapas del pool: ${meta.maps.join(', ')}`}
+                        >
+                          {meta.maps.length} Mapas
+                        </span>
                       )}
-                      
-                      {/* Vertical line drawing is complex with asymmetric LB trees, we'll keep it simple for now or disable if LB */}
-                      {i > 0 && title !== "Lower Bracket" && (
-                        <div style={{
-                          position: 'absolute', left: '-2rem', width: '2px', height: `${verticalLineHeight}%`,
-                          background: 'var(--border-light)', top: '50%', transform: 'translateY(-50%)', zIndex: 0
-                        }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Matches Column */}
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-around',
+                    position: 'relative',
+                  }}
+                >
+                  {roundsMap[roundIndex].map((match) => (
+                    <div
+                      key={match.id}
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {i > 0 && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: '-2rem',
+                            width: '2rem',
+                            height: '2px',
+                            background: 'var(--border-light)',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            zIndex: 0,
+                          }}
+                        />
+                      )}
+
+                      {i > 0 && title !== 'Lower Bracket' && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: '-2rem',
+                            width: '2px',
+                            height: `${verticalLineHeight}%`,
+                            background: 'var(--border-light)',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            zIndex: 0,
+                          }}
+                        />
                       )}
 
                       <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
-                        <MatchCard 
-                          match={match} 
-                          teamMap={teamMap} 
-                          canManage={canManage} 
+                        <MatchCard
+                          match={match}
+                          teamMap={teamMap}
+                          canManage={canManage}
                           onClick={handleMatchClick}
                           matchNumber={matchNumbers[match.id]}
                           feeders={finalFeeders[match.id]}
+                          isDndEnabled={Boolean(isDndActive && match.round === 1 && match.is_upper)}
+                          onSlotDragStart={handleSlotDragStart}
+                          onSlotDrop={handleSlotDrop}
                         />
                       </div>
-                      
+
                       {i < roundKeys.length - 1 && (
-                        <div style={{
-                          position: 'absolute', right: '-2rem', width: '2rem', height: '2px',
-                          background: 'var(--border-light)', top: '50%', transform: 'translateY(-50%)', zIndex: 0
-                        }} />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            right: '-2rem',
+                            width: '2rem',
+                            height: '2px',
+                            background: 'var(--border-light)',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            zIndex: 0,
+                          }}
+                        />
                       )}
                     </div>
                   ))}
@@ -336,42 +711,87 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
 
   const handleMouseLeave = () => setIsDragging(false);
   const handleMouseUp = () => setIsDragging(false);
-  
+
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !scrollRef.current) return;
     e.preventDefault();
     const x = e.pageX - scrollRef.current.offsetLeft;
     const y = e.pageY - scrollRef.current.offsetTop;
-    const walkX = (x - startX) * 1.5; // Scroll speed multiplier
+    const walkX = (x - startX) * 1.5;
     const walkY = (y - startY) * 1.5;
     scrollRef.current.scrollLeft = scrollLeft - walkX;
     scrollRef.current.scrollTop = scrollTop - walkY;
   };
 
-  return (
-    <div 
-      ref={scrollRef}
-      onMouseDown={handleMouseDown}
-      onMouseLeave={handleMouseLeave}
-      onMouseUp={handleMouseUp}
-      onMouseMove={handleMouseMove}
-      style={{
-      width: '100%',
-      overflowX: 'auto',
-      overflowY: 'auto',
-      padding: '2rem',
-      background: 'rgba(0,0,0,0.2)',
-      borderRadius: '12px',
-      minHeight: '500px',
-      border: '1px solid var(--border-light)',
-      cursor: isDragging ? 'grabbing' : 'grab',
-      userSelect: 'none'
-    }}>
-      {renderBracketSection(ubRoundKeys, ubRounds, ubM1, (tournament?.tournament_format === 'double_elimination' || tournament?.template_json?.tournamentFormat === 'double_elimination') ? "Upper Bracket" : null)}
-      {renderBracketSection(lbRoundKeys, lbRounds, lbM1, "Lower Bracket")}
+  // Filtered maps for the map pool modal
+  const filteredModalMaps = availableMaps.filter((map: any) => {
+    if (mapFilter !== 'all' && map.type !== mapFilter) return false;
+    if (searchMap.trim() && !map.name.toLowerCase().includes(searchMap.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
 
+  return (
+    <div>
+      {isDndActive && (
+        <div
+          style={{
+            background: 'rgba(111, 175, 58, 0.08)',
+            border: '1px solid rgba(111, 175, 58, 0.25)',
+            borderRadius: '8px',
+            padding: '0.75rem 1rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            color: 'var(--text-main)',
+            fontSize: '0.85rem',
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }}>🔀</span>
+          <div>
+            <strong style={{ color: 'var(--primary)' }}>Ajuste de emparejamientos activo:</strong>{' '}
+            <span className="text-muted">
+              Arrastra y suelta los equipos de la Ronda 1 para reorganizar los cruces iniciales antes de cerrar el torneo.
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        onMouseDown={handleMouseDown}
+        onMouseLeave={handleMouseLeave}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
+        style={{
+          width: '100%',
+          overflowX: 'auto',
+          overflowY: 'auto',
+          padding: '2rem',
+          background: 'rgba(0,0,0,0.2)',
+          borderRadius: '12px',
+          minHeight: '500px',
+          border: '1px solid var(--border-light)',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          userSelect: 'none',
+        }}
+      >
+      {renderBracketSection(
+        ubRoundKeys,
+        ubRounds,
+        ubM1,
+        tournament?.tournament_format === 'double_elimination' ||
+          (tournament?.template_json as any)?.tournamentFormat === 'double_elimination'
+          ? 'Upper Bracket'
+          : null
+      )}
+      {renderBracketSection(lbRoundKeys, lbRounds, lbM1, 'Lower Bracket')}
+
+      {/* Score Modal */}
       {selectedMatch && (
-        <ScoreModal 
+        <ScoreModal
           match={selectedMatch}
           team1={selectedTeam1}
           team2={selectedTeam2}
@@ -380,6 +800,308 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
           isSaving={isSaving}
         />
       )}
+
+      {/* Map Pool Configuration Modal (Official & Custom Maps) */}
+      {mapPoolModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setMapPoolModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: '650px',
+              padding: '2rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.25rem',
+              background: '#14161A',
+              border: '1px solid var(--border-light)',
+              borderRadius: '14px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Layers size={20} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: '1.25rem' }}>
+                  Pool de Mapas: {mapPoolModal.roundTitle}
+                </h3>
+              </div>
+              <button
+                className="btn-icon"
+                onClick={() => setMapPoolModal((prev) => ({ ...prev, isOpen: false }))}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-muted text-sm" style={{ margin: 0 }}>
+              Selecciona qué mapas (oficiales y customs) formarán el pool para esta ronda. Al crear un veto para un partido de esta ronda, se precargarán automáticamente.
+            </p>
+
+            {/* Filter Tabs & Search */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '0.3rem' }}>
+                <button
+                  type="button"
+                  className={`btn text-xs ${mapFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '0.3rem 0.6rem' }}
+                  onClick={() => setMapFilter('all')}
+                >
+                  Todos ({availableMaps.length})
+                </button>
+                <button
+                  type="button"
+                  className={`btn text-xs ${mapFilter === 'official' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '0.3rem 0.6rem' }}
+                  onClick={() => setMapFilter('official')}
+                >
+                  Oficiales ({availableMaps.filter((m) => m.type === 'official').length})
+                </button>
+                <button
+                  type="button"
+                  className={`btn text-xs ${mapFilter === 'custom' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '0.3rem 0.6rem' }}
+                  onClick={() => setMapFilter('custom')}
+                >
+                  Customs ({availableMaps.filter((m) => m.type === 'custom').length})
+                </button>
+              </div>
+
+              {/* Search */}
+              <div style={{ flex: 1, minWidth: '150px', position: 'relative' }}>
+                <input
+                  type="text"
+                  className="input-base text-xs"
+                  placeholder="Buscar mapa..."
+                  value={searchMap}
+                  onChange={(e) => setSearchMap(e.target.value)}
+                  style={{ width: '100%', padding: '0.35rem 0.6rem' }}
+                />
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '0.5rem',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                {mapPoolModal.selectedMaps.length} mapas seleccionados en el pool
+              </span>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  onClick={() =>
+                    setMapPoolModal((prev) => ({
+                      ...prev,
+                      selectedMaps: availableMaps.map((m) => m.name),
+                    }))
+                  }
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  onClick={() =>
+                    setMapPoolModal((prev) => ({
+                      ...prev,
+                      selectedMaps: availableMaps
+                        .filter((m) => m.type === 'official')
+                        .map((m) => m.name),
+                    }))
+                  }
+                >
+                  Solo Oficiales
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  onClick={() =>
+                    setMapPoolModal((prev) => ({
+                      ...prev,
+                      selectedMaps: availableMaps
+                        .filter((m) => m.type === 'custom')
+                        .map((m) => m.name),
+                    }))
+                  }
+                >
+                  Solo Customs
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  onClick={() => setMapPoolModal((prev) => ({ ...prev, selectedMaps: [] }))}
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            {/* Available Map Chips Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                gap: '0.5rem',
+                maxHeight: '260px',
+                overflowY: 'auto',
+                padding: '0.75rem',
+                background: 'rgba(0, 0, 0, 0.3)',
+                borderRadius: '8px',
+                border: '1px solid var(--border-light)',
+                alignContent: 'start',
+              }}
+            >
+              {filteredModalMaps.map((mapItem: any) => {
+                const mapName = mapItem.name;
+                const isSelected = mapPoolModal.selectedMaps.includes(mapName);
+                const isOfficial = mapItem.type === 'official';
+
+                return (
+                  <button
+                    key={mapName}
+                    type="button"
+                    className="btn text-xs"
+                    style={{
+                      padding: '0.45rem 0.6rem',
+                      borderRadius: '6px',
+                      background: isSelected
+                        ? 'rgba(111, 175, 58, 0.25)'
+                        : 'rgba(255, 255, 255, 0.05)',
+                      border: isSelected
+                        ? '1px solid var(--primary)'
+                        : '1px solid rgba(255,255,255,0.1)',
+                      color: isSelected ? 'var(--primary)' : 'var(--text-main)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.4rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      textAlign: 'left',
+                    }}
+                    onClick={() => {
+                      if (isSelected) {
+                        setMapPoolModal((prev) => ({
+                          ...prev,
+                          selectedMaps: prev.selectedMaps.filter((m) => m !== mapName),
+                        }));
+                      } else {
+                        setMapPoolModal((prev) => ({
+                          ...prev,
+                          selectedMaps: [...prev.selectedMaps, mapName],
+                        }));
+                      }
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      <span
+                        style={{
+                          fontWeight: isSelected ? 'bold' : 'normal',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {mapName}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.65rem',
+                          color: isOfficial ? 'var(--muted)' : '#C499FF',
+                        }}
+                      >
+                        {isOfficial ? 'Oficial' : 'Custom'}
+                      </span>
+                    </div>
+                    {isSelected && <Check size={14} style={{ flexShrink: 0 }} />}
+                  </button>
+                );
+              })}
+
+              {filteredModalMaps.length === 0 && (
+                <p
+                  className="text-muted text-xs"
+                  style={{ gridColumn: '1 / -1', textAlign: 'center', margin: '1.5rem 0' }}
+                >
+                  No se encontraron mapas con los filtros aplicados.
+                </p>
+              )}
+            </div>
+
+            {/* Add Custom Map input */}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                className="input-base text-sm"
+                placeholder="Agregar mapa adicional por nombre..."
+                value={mapPoolModal.customMapInput}
+                onChange={(e) =>
+                  setMapPoolModal((prev) => ({ ...prev, customMapInput: e.target.value }))
+                }
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={() => {
+                  if (mapPoolModal.customMapInput.trim()) {
+                    setMapPoolModal((prev) => ({
+                      ...prev,
+                      selectedMaps: [
+                        ...prev.selectedMaps,
+                        mapPoolModal.customMapInput.trim().toUpperCase(),
+                      ],
+                      customMapInput: '',
+                    }));
+                  }
+                }}
+              >
+                Agregar
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setMapPoolModal((prev) => ({ ...prev, isOpen: false }))}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveMapPool}
+              >
+                Guardar Pool de Mapas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   );
 }

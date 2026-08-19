@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Trash2, Check, Save } from "lucide-react";
+import { Plus, Trash2, Check, Save, EyeOff, User } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { TwitchIcon, DiscordIcon, YoutubeIcon, XIcon } from "@/components/SocialIcons";
 
 export default function CreateTournament() {
   const { data: session } = useSession();
@@ -162,30 +163,131 @@ export default function CreateTournament() {
               <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setLogoFile(e.target.files?.[0] || null)} />
             </label>
           </div>
-          <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <input 
-                type="checkbox" 
-                id="private-tournament"
-                checked={isPrivate}
-                onChange={e => setIsPrivate(e.target.checked)}
-                style={{ width: "18px", height: "18px", cursor: "pointer" }}
-              />
-              <label htmlFor="private-tournament" className="text-sm text-main" style={{ cursor: "pointer" }}>
-                Torneo Privado (Oculto en Explorar)
-              </label>
+          <div style={{ marginTop: "1.75rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+            {/* Private Tournament Option */}
+            <div
+              onClick={() => setIsPrivate(!isPrivate)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.9rem 1.15rem",
+                borderRadius: "10px",
+                background: isPrivate ? "rgba(111, 175, 58, 0.08)" : "rgba(255, 255, 255, 0.02)",
+                border: isPrivate ? "1px solid rgba(111, 175, 58, 0.4)" : "1px solid var(--border-light)",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                userSelect: "none",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "8px",
+                    background: isPrivate ? "rgba(111, 175, 58, 0.15)" : "rgba(255, 255, 255, 0.04)",
+                    border: isPrivate ? "1px solid rgba(111, 175, 58, 0.3)" : "1px solid var(--border-light)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: isPrivate ? "var(--primary)" : "var(--text-muted)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <EyeOff size={18} />
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: "600", color: isPrivate ? "#FFFFFF" : "var(--text-main)" }}>
+                    Torneo Privado
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                    Oculto en la sección de Explorar. Solo accesible mediante enlace directo o invitación.
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Checkbox Indicator */}
+              <div
+                style={{
+                  width: "22px",
+                  height: "22px",
+                  borderRadius: "6px",
+                  border: isPrivate ? "2px solid var(--primary)" : "2px solid var(--border-medium)",
+                  background: isPrivate ? "var(--primary)" : "rgba(0, 0, 0, 0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "all 0.2s ease",
+                  flexShrink: 0,
+                  marginLeft: "1rem",
+                }}
+              >
+                {isPrivate && <Check size={14} color="#000000" strokeWidth={3.5} />}
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <input 
-                type="checkbox" 
-                id="is1v1-tournament"
-                checked={is1v1}
-                onChange={e => setIs1v1(e.target.checked)}
-                style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--primary)" }}
-              />
-              <label htmlFor="is1v1-tournament" className="text-sm text-main" style={{ cursor: "pointer", color: "var(--primary)", fontWeight: "bold" }}>
-                Torneo 1v1 (Individual)
-              </label>
+
+            {/* 1v1 Tournament Option */}
+            <div
+              onClick={() => setIs1v1(!is1v1)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.9rem 1.15rem",
+                borderRadius: "10px",
+                background: is1v1 ? "rgba(111, 175, 58, 0.08)" : "rgba(255, 255, 255, 0.02)",
+                border: is1v1 ? "1px solid rgba(111, 175, 58, 0.4)" : "1px solid var(--border-light)",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                userSelect: "none",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "8px",
+                    background: is1v1 ? "rgba(111, 175, 58, 0.15)" : "rgba(255, 255, 255, 0.04)",
+                    border: is1v1 ? "1px solid rgba(111, 175, 58, 0.3)" : "1px solid var(--border-light)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: is1v1 ? "var(--primary)" : "var(--text-muted)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <User size={18} />
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: "600", color: is1v1 ? "#FFFFFF" : "var(--text-main)" }}>
+                    Torneo 1v1 (Individual)
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                    Modalidad individual donde cada participante juega y compite por su propia cuenta.
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Checkbox Indicator */}
+              <div
+                style={{
+                  width: "22px",
+                  height: "22px",
+                  borderRadius: "6px",
+                  border: is1v1 ? "2px solid var(--primary)" : "2px solid var(--border-medium)",
+                  background: is1v1 ? "var(--primary)" : "rgba(0, 0, 0, 0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "all 0.2s ease",
+                  flexShrink: 0,
+                  marginLeft: "1rem",
+                }}
+              >
+                {is1v1 && <Check size={14} color="#000000" strokeWidth={3.5} />}
+              </div>
             </div>
           </div>
         </div>
@@ -195,19 +297,27 @@ export default function CreateTournament() {
           <h2 style={{ marginBottom: "1.5rem", color: "var(--primary)" }}>Redes y Reglas (Opcional)</h2>
           <div className="flex gap-4" style={{ flexWrap: "wrap", marginBottom: "1.5rem" }}>
             <div style={{ flex: "1 1 200px" }}>
-              <label className="text-sm text-muted font-medium block mb-2">Twitch</label>
+              <label className="text-sm text-muted font-medium flex items-center gap-1.5 mb-2">
+                <TwitchIcon size={15} color="#9146FF" /> Twitch
+              </label>
               <input className="input-base" value={socialLinks.twitch} onChange={e => setSocialLinks({...socialLinks, twitch: e.target.value})} placeholder="URL de Twitch" />
             </div>
             <div style={{ flex: "1 1 200px" }}>
-              <label className="text-sm text-muted font-medium block mb-2">Twitter (X)</label>
+              <label className="text-sm text-muted font-medium flex items-center gap-1.5 mb-2">
+                <XIcon size={15} color="#ffffff" /> Twitter (X)
+              </label>
               <input className="input-base" value={socialLinks.twitter} onChange={e => setSocialLinks({...socialLinks, twitter: e.target.value})} placeholder="URL de Twitter" />
             </div>
             <div style={{ flex: "1 1 200px" }}>
-              <label className="text-sm text-muted font-medium block mb-2">YouTube</label>
+              <label className="text-sm text-muted font-medium flex items-center gap-1.5 mb-2">
+                <YoutubeIcon size={15} color="#FF0000" /> YouTube
+              </label>
               <input className="input-base" value={socialLinks.youtube} onChange={e => setSocialLinks({...socialLinks, youtube: e.target.value})} placeholder="URL de YouTube" />
             </div>
             <div style={{ flex: "1 1 200px" }}>
-              <label className="text-sm text-muted font-medium block mb-2">Discord</label>
+              <label className="text-sm text-muted font-medium flex items-center gap-1.5 mb-2">
+                <DiscordIcon size={15} color="#5865F2" /> Discord
+              </label>
               <input className="input-base" value={socialLinks.discord} onChange={e => setSocialLinks({...socialLinks, discord: e.target.value})} placeholder="URL de Discord" />
             </div>
           </div>

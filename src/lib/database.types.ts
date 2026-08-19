@@ -242,6 +242,7 @@ export type Database = {
           alias: string
           bio: string | null
           twitch_channel: string | null
+          kick_channel: string | null
           youtube_channel: string | null
           languages: string[] | null
           status: string
@@ -255,6 +256,7 @@ export type Database = {
           alias: string
           bio?: string | null
           twitch_channel?: string | null
+          kick_channel?: string | null
           youtube_channel?: string | null
           languages?: string[] | null
           status?: string
@@ -268,6 +270,7 @@ export type Database = {
           alias?: string
           bio?: string | null
           twitch_channel?: string | null
+          kick_channel?: string | null
           youtube_channel?: string | null
           languages?: string[] | null
           status?: string
@@ -293,6 +296,7 @@ export type Database = {
           bio: string | null
           avatar_url: string | null
           twitch_channel: string | null
+          kick_channel: string | null
           youtube_channel: string | null
           is_live: boolean | null
           created_at: string
@@ -305,6 +309,7 @@ export type Database = {
           bio?: string | null
           avatar_url?: string | null
           twitch_channel?: string | null
+          kick_channel?: string | null
           youtube_channel?: string | null
           is_live?: boolean | null
           created_at?: string
@@ -317,6 +322,7 @@ export type Database = {
           bio?: string | null
           avatar_url?: string | null
           twitch_channel?: string | null
+          kick_channel?: string | null
           youtube_channel?: string | null
           is_live?: boolean | null
           created_at?: string
@@ -382,6 +388,7 @@ export type Database = {
           alias: string
           bio: string | null
           twitch_channel: string | null
+          kick_channel: string | null
           youtube_channel: string | null
           languages: string[] | null
           status: string
@@ -396,6 +403,7 @@ export type Database = {
           alias: string
           bio?: string | null
           twitch_channel?: string | null
+          kick_channel?: string | null
           youtube_channel?: string | null
           languages?: string[] | null
           status?: string
@@ -410,6 +418,7 @@ export type Database = {
           alias?: string
           bio?: string | null
           twitch_channel?: string | null
+          kick_channel?: string | null
           youtube_channel?: string | null
           languages?: string[] | null
           status?: string

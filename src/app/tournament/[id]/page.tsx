@@ -4,19 +4,17 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import {
   Users,
   Trophy,
   Download,
   Settings,
   Edit,
-  Video,
-  MessageCircle,
-  PlayCircle,
-  MessageSquare,
   FileText,
   X,
   Link as LinkIcon,
+  Globe,
   Copy,
   Tv,
   ExternalLink,
@@ -32,19 +30,43 @@ import { fetchBansInBatches } from "@/lib/ban-checker";
 import BracketViewer from "@/components/BracketViewer";
 import SwissViewer from "@/components/SwissViewer";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import {
+  TwitchIcon,
+  DiscordIcon,
+  YoutubeIcon,
+  XIcon,
+  KickIcon,
+  SteamIcon,
+  InstagramIcon,
+} from "@/components/SocialIcons";
+import { normalizeLanguages, MAIN_CASTER_LANGUAGES } from "@/lib/language-helper";
 
-// Twitch SVG Icon
-const TwitchIcon = ({ size = 18, className = "" }: { size?: number; className?: string }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className={className}
-  >
-    <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z" />
-  </svg>
-);
+// Helper to format YouTube URLs properly
+const formatYoutubeUrl = (channelOrUrl?: string | null) => {
+  if (!channelOrUrl) return "https://youtube.com";
+  const trimmed = channelOrUrl.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("@")) {
+    return `https://www.youtube.com/${trimmed}`;
+  }
+  if (trimmed.startsWith("UC") && trimmed.length >= 20) {
+    return `https://www.youtube.com/channel/${trimmed}`;
+  }
+  return `https://www.youtube.com/@${trimmed}`;
+};
+
+const extractPlatformUsername = (channelOrUrl?: string | null) => {
+  if (!channelOrUrl) return "";
+  let clean = channelOrUrl.trim();
+  clean = clean.replace(/^https?:\/\//i, "");
+  clean = clean.replace(/^www\./i, "");
+  clean = clean.replace(/^(twitch\.tv|kick\.com|youtube\.com|youtu\.be)\//i, "");
+  clean = clean.replace(/^(c\/|user\/|channel\/)/i, "");
+  clean = clean.split("/")[0].split("?")[0];
+  return clean || channelOrUrl;
+};
 
 import { Database } from '@/lib/database.types';
 
@@ -72,19 +94,31 @@ const generateId = (children: any): string => {
     .replace(/[^\w\-]+/g, "");
 };
 
+let cachedTournamentDetails: Record<string, {
+  tournament: Tournament;
+  teams: Team[];
+  matches: Match[];
+  tournamentCasters?: any[];
+  tournamentApplications?: any[];
+  userTournamentApp?: any;
+  isGlobalCaster?: boolean;
+  globalCasterProfile?: any;
+}> = {};
+
 export default function TournamentDetails() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
   const { data: session } = useSession();
 
-  const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cached = id ? cachedTournamentDetails[id] : null;
+  const [tournament, setTournament] = useState<Tournament | null>(cached?.tournament || null);
+  const [teams, setTeams] = useState<Team[]>(cached?.teams || []);
+  const [isLoading, setIsLoading] = useState(!cached);
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({});
   const [teamsSearch, setTeamsSearch] = useState("");
   const [activeTab, setActiveTab] = useState("teams");
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [matches, setMatches] = useState<Match[]>(cached?.matches || []);
   const [isGeneratingBracket, setIsGeneratingBracket] = useState(false);
 
   const [teamToDelete, setTeamToDelete] = useState<string | null>(null);
@@ -101,11 +135,14 @@ export default function TournamentDetails() {
   const [tournamentCasters, setTournamentCasters] = useState<any[]>([]);
   const [tournamentApplications, setTournamentApplications] = useState<any[]>([]);
   const [userTournamentApp, setUserTournamentApp] = useState<any>(null);
+  const [isGlobalCaster, setIsGlobalCaster] = useState(false);
+  const [globalCasterProfile, setGlobalCasterProfile] = useState<any>(null);
   const [isCasterModalOpen, setIsCasterModalOpen] = useState(false);
   const [casterForm, setCasterForm] = useState({
     alias: "",
     bio: "",
     twitch_channel: "",
+    kick_channel: "",
     youtube_channel: "",
     languages: ["Español"],
   });
@@ -117,6 +154,38 @@ export default function TournamentDetails() {
     if (id) {
       fetchData();
       fetchTournamentCasters();
+
+      // Realtime subscription for matches & tournament updates
+      const tourneyChannel = supabase
+        .channel(`tournament_realtime_${id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "matches", filter: `tournament_id=eq.${id}` },
+          (payload: any) => {
+            if (payload.eventType === "UPDATE") {
+              setMatches((prev) =>
+                prev.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m))
+              );
+            } else {
+              fetchData();
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "tournaments", filter: `id=eq.${id}` },
+          () => fetchData()
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "tournament_casters", filter: `tournament_id=eq.${id}` },
+          () => fetchTournamentCasters()
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(tourneyChannel);
+      };
     }
   }, [id]);
 
@@ -128,13 +197,26 @@ export default function TournamentDetails() {
         setTournamentCasters(data.casters || []);
         setTournamentApplications(data.applications || []);
         setUserTournamentApp(data.userApplication || null);
+        setIsGlobalCaster(!!data.isGlobalCaster);
+        setGlobalCasterProfile(data.globalCasterProfile || null);
+
         if (data.userApplication) {
           setCasterForm({
             alias: data.userApplication.alias || "",
             bio: data.userApplication.bio || "",
             twitch_channel: data.userApplication.twitch_channel || "",
+            kick_channel: data.userApplication.kick_channel || "",
             youtube_channel: data.userApplication.youtube_channel || "",
-            languages: data.userApplication.languages || ["Español"],
+            languages: normalizeLanguages(data.userApplication.languages),
+          });
+        } else if (data.globalCasterProfile) {
+          setCasterForm({
+            alias: data.globalCasterProfile.alias || "",
+            bio: data.globalCasterProfile.bio || "",
+            twitch_channel: data.globalCasterProfile.twitch_channel || "",
+            kick_channel: data.globalCasterProfile.kick_channel || "",
+            youtube_channel: data.globalCasterProfile.youtube_channel || "",
+            languages: normalizeLanguages(data.globalCasterProfile.languages),
           });
         }
       }
@@ -144,7 +226,7 @@ export default function TournamentDetails() {
   };
 
   const fetchData = async () => {
-    setIsLoading(true);
+    if (!cachedTournamentDetails[id]) setIsLoading(true);
     // Fetch Tournament
     const { data: tData, error: tError } = await supabase
       .from("tournaments")
@@ -178,6 +260,17 @@ export default function TournamentDetails() {
       setMatches(matchesData);
     }
 
+    cachedTournamentDetails[id] = {
+      tournament: tData,
+      teams: teamsData || [],
+      matches: matchesData || [],
+      tournamentCasters,
+      tournamentApplications,
+      userTournamentApp,
+      isGlobalCaster,
+      globalCasterProfile,
+    };
+
     setIsLoading(false);
 
     // Fetch Community Bans in background batches without blocking page render
@@ -208,6 +301,9 @@ export default function TournamentDetails() {
       .eq("tournament_id", id);
     if (matchesData) {
       setMatches(matchesData);
+      if (cachedTournamentDetails[id]) {
+        cachedTournamentDetails[id].matches = matchesData;
+      }
     }
   };
 
@@ -224,7 +320,7 @@ export default function TournamentDetails() {
     window.location.href = `/api/tournament/${id}/export-logos`;
   };
 
-  if (isLoading) {
+  if (isLoading && !cachedTournamentDetails[id]) {
     return <LoadingSpinner text="Cargando Torneo..." fullHeight={true} />;
   }
 
@@ -373,6 +469,32 @@ export default function TournamentDetails() {
     setTeamToDelete(teamId);
   };
 
+  const handleQuickApplyTournamentCaster = async () => {
+    if (!isGlobalCaster) {
+      setIsCasterModalOpen(true);
+      return;
+    }
+    setIsSubmittingCaster(true);
+    try {
+      const res = await fetch(`/api/tournament/${id}/casters`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Error al enviar postulación.");
+      } else {
+        toast.success(data.message || "Postulación enviada correctamente.");
+        fetchTournamentCasters();
+      }
+    } catch (e) {
+      toast.error("Error de red al enviar la postulación.");
+    } finally {
+      setIsSubmittingCaster(false);
+    }
+  };
+
   const handleApplyCaster = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingCaster(true);
@@ -386,7 +508,7 @@ export default function TournamentDetails() {
       if (!res.ok) {
         toast.error(data.error || "Error al enviar solicitud.");
       } else {
-        toast.success("Solicitud enviada correctamente para este torneo.");
+        toast.success(data.message || "Solicitud enviada correctamente para este torneo.");
         setIsCasterModalOpen(false);
         fetchTournamentCasters();
       }
@@ -474,18 +596,32 @@ export default function TournamentDetails() {
     setExpandedTeams(newExpanded);
   };
 
-  const renderSocialLink = (linkType: string, url: string, Icon: any, label: string) => {
+  const renderSocialLink = (
+    linkType: string,
+    url: string | undefined,
+    Icon: any,
+    label: string,
+    brandColor: string = "var(--primary)"
+  ) => {
     if (!url) return null;
+    const formattedUrl = url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
     return (
       <a
-        href={url}
+        href={formattedUrl}
         target="_blank"
         rel="noreferrer"
-        className="btn-icon social-icon"
-        style={{ background: "transparent", color: "var(--primary)" }}
+        className="social-icon"
+        style={{
+          background: "transparent",
+          color: brandColor,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0.4rem",
+        }}
         title={label}
       >
-        <Icon size={24} />
+        <Icon size={24} color={brandColor} />
       </a>
     );
   };
@@ -722,7 +858,7 @@ export default function TournamentDetails() {
                       textAlign: "center",
                     }}
                   >
-                    ¿Perfil Público?
+                    ¿Horas públicas?
                   </th>
                   <th style={{ padding: "0.5rem 1rem", textAlign: "center" }}>
                     Ban Comunitario
@@ -803,7 +939,7 @@ export default function TournamentDetails() {
                           textAlign: "center",
                         }}
                       >
-                        {p.is_profile_private ? (
+                        {p.is_profile_private || !p.l4d2_playtime_hours || Number(p.l4d2_playtime_hours) === 0 ? (
                           <span className="text-danger">No</span>
                         ) : (
                           <span className="text-success">Sí</span>
@@ -1096,11 +1232,14 @@ export default function TournamentDetails() {
               alignItems: "center",
             }}
           >
-            {renderSocialLink("youtube", templateJson.social_links?.youtube, Video, "YouTube")}
-            {renderSocialLink("discord", templateJson.social_links?.discord, MessageCircle, "Discord")}
-            {renderSocialLink("twitch", templateJson.social_links?.twitch, PlayCircle, "Twitch")}
-            {renderSocialLink("twitter", templateJson.social_links?.twitter, MessageSquare, "X (Twitter)")}
-            {renderSocialLink("website", templateJson.social_links?.website, LinkIcon, "Website")}
+            {renderSocialLink("youtube", templateJson.social_links?.youtube, YoutubeIcon, "YouTube", "#FF0000")}
+            {renderSocialLink("discord", templateJson.social_links?.discord, DiscordIcon, "Discord", "#5865F2")}
+            {renderSocialLink("twitch", templateJson.social_links?.twitch, TwitchIcon, "Twitch", "#9146FF")}
+            {renderSocialLink("twitter", templateJson.social_links?.twitter, XIcon, "X (Twitter)", "#FFFFFF")}
+            {renderSocialLink("kick", templateJson.social_links?.kick, KickIcon, "Kick", "#53FC18")}
+            {renderSocialLink("steam", templateJson.social_links?.steam, SteamIcon, "Steam", "#66C0F4")}
+            {renderSocialLink("instagram", templateJson.social_links?.instagram, InstagramIcon, "Instagram", "#E1306C")}
+            {renderSocialLink("website", templateJson.social_links?.website, Globe, "Sitio Web", "var(--primary)")}
           </div>
           {templateJson.rules && (
             <button
@@ -1295,6 +1434,20 @@ export default function TournamentDetails() {
             onClick={() => setActiveTab("casters")}
           >
             <Tv size={16} /> Casters Oficiales ({tournamentCasters.length})
+            {canManage && tournamentApplications.filter((a) => a.status === "pending").length > 0 && (
+              <span
+                style={{
+                  background: "rgba(234, 179, 8, 0.25)",
+                  color: "var(--warning)",
+                  padding: "0.1rem 0.45rem",
+                  borderRadius: "100px",
+                  fontSize: "0.75rem",
+                  fontWeight: "bold",
+                }}
+              >
+                {tournamentApplications.filter((a) => a.status === "pending").length} pendiente(s)
+              </span>
+            )}
           </button>
         </div>
 
@@ -1566,7 +1719,7 @@ export default function TournamentDetails() {
               </div>
 
               {session?.user && (
-                <div>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                   {userTournamentApp ? (
                     <div
                       style={{
@@ -1616,13 +1769,43 @@ export default function TournamentDetails() {
                           : "Solicitud en Revisión"}
                       </span>
                     </div>
+                  ) : isGlobalCaster ? (
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleQuickApplyTournamentCaster}
+                        disabled={isSubmittingCaster}
+                        style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+                      >
+                        <TwitchIcon size={16} />
+                        {isSubmittingCaster
+                          ? "Enviando..."
+                          : `Postularme a este Torneo (${globalCasterProfile?.alias || "Caster"})`}
+                      </button>
+                      <button
+                        className="btn btn-secondary text-xs"
+                        onClick={() => setIsCasterModalOpen(true)}
+                        style={{ padding: "0.5rem 0.75rem" }}
+                      >
+                        Personalizar
+                      </button>
+                    </div>
                   ) : (
                     <button
-                      className="btn btn-primary"
+                      className="btn"
                       onClick={() => setIsCasterModalOpen(true)}
-                      style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+                      style={{
+                        background: "#9146FF",
+                        color: "#FFFFFF",
+                        fontWeight: "bold",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.5rem 1rem",
+                        borderRadius: "8px",
+                      }}
                     >
-                      <TwitchIcon size={16} /> Postularme como Caster
+                      <Tv size={16} /> Postularme como Caster
                     </button>
                   )}
                 </div>
@@ -1754,26 +1937,81 @@ export default function TournamentDetails() {
                       </div>
                     )}
 
-                    {/* Stream Link Button */}
-                    <div style={{ marginTop: "auto", paddingTop: "0.5rem", borderTop: "1px solid var(--border-light)" }}>
+                    {/* Stream Link Icons + Usernames */}
+                    <div
+                      style={{
+                        marginTop: "auto",
+                        paddingTop: "0.75rem",
+                        borderTop: "1px solid var(--border-light)",
+                        display: "flex",
+                        gap: "0.85rem",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
                       {c.twitch_channel && (
                         <a
-                          href={`https://twitch.tv/${c.twitch_channel}`}
+                          href={`https://twitch.tv/${extractPlatformUsername(c.twitch_channel)}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="btn text-sm"
                           style={{
-                            width: "100%",
-                            background: "#9146FF",
-                            color: "#fff",
-                            display: "flex",
+                            display: "inline-flex",
                             alignItems: "center",
-                            justifyContent: "center",
-                            gap: "0.4rem",
-                            padding: "0.5rem",
+                            gap: "0.35rem",
+                            color: "#9146FF",
+                            textDecoration: "none",
+                            fontWeight: "bold",
+                            fontSize: "0.9rem",
+                            background: "transparent",
                           }}
+                          title={`Twitch: ${extractPlatformUsername(c.twitch_channel)}`}
                         >
-                          <TwitchIcon size={16} /> Ver Canal en Twitch
+                          <TwitchIcon size={16} color="#9146FF" />
+                          <span>{extractPlatformUsername(c.twitch_channel)}</span>
+                        </a>
+                      )}
+
+                      {c.kick_channel && (
+                        <a
+                          href={`https://kick.com/${extractPlatformUsername(c.kick_channel)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            color: "#53FC18",
+                            textDecoration: "none",
+                            fontWeight: "bold",
+                            fontSize: "0.9rem",
+                            background: "transparent",
+                          }}
+                          title={`Kick: ${extractPlatformUsername(c.kick_channel)}`}
+                        >
+                          <KickIcon size={16} color="#53FC18" />
+                          <span>{extractPlatformUsername(c.kick_channel)}</span>
+                        </a>
+                      )}
+
+                      {c.youtube_channel && (
+                        <a
+                          href={formatYoutubeUrl(c.youtube_channel)}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            color: "#FF0000",
+                            textDecoration: "none",
+                            fontWeight: "bold",
+                            fontSize: "0.9rem",
+                            background: "transparent",
+                          }}
+                          title={`YouTube: ${extractPlatformUsername(c.youtube_channel)}`}
+                        >
+                          <YoutubeIcon size={16} color="#FF0000" />
+                          <span>{extractPlatformUsername(c.youtube_channel)}</span>
                         </a>
                       )}
                     </div>
@@ -1783,7 +2021,7 @@ export default function TournamentDetails() {
             )}
 
             {/* Organizer Review Section for Tournament Applications */}
-            {canManage && tournamentApplications.length > 0 && (
+            {canManage && (
               <div
                 className="card"
                 style={{
@@ -1797,7 +2035,7 @@ export default function TournamentDetails() {
                   <ShieldCheck size={22} color="var(--primary)" />
                   <div>
                     <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "bold" }}>
-                      Gestión de Solicitudes de Casters del Torneo
+                      Gestión de Solicitudes de Casters del Torneo ({tournamentApplications.length})
                     </h3>
                     <p className="text-muted text-sm" style={{ margin: 0 }}>
                       Revisa y aprueba comentaristas específicos para este torneo.
@@ -1805,8 +2043,15 @@ export default function TournamentDetails() {
                   </div>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {tournamentApplications.map((app) => (
+                {tournamentApplications.length === 0 ? (
+                  <div style={{ padding: "1.5rem", textAlign: "center", background: "rgba(255, 255, 255, 0.02)", borderRadius: "8px", border: "1px dashed var(--border-light)" }}>
+                    <p className="text-muted text-sm" style={{ margin: 0 }}>
+                      Aún no hay solicitudes de casters registradas para este torneo.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    {tournamentApplications.map((app) => (
                     <div
                       key={app.id}
                       style={{
@@ -1867,23 +2112,78 @@ export default function TournamentDetails() {
                             </span>
                           </div>
                           <p className="text-muted text-xs" style={{ margin: "0.2rem 0 0" }}>
-                            Usuario: {app.users?.name || app.users?.email} | Twitch: {app.twitch_channel}
+                            Usuario: {app.users?.name || app.users?.email}
                           </p>
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <div style={{ display: "flex", gap: "0.85rem", flexWrap: "wrap", alignItems: "center" }}>
                         {app.twitch_channel && (
                           <a
-                            href={`https://twitch.tv/${app.twitch_channel}`}
+                            href={`https://twitch.tv/${extractPlatformUsername(app.twitch_channel)}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="btn btn-secondary text-xs"
-                            style={{ display: "flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.6rem" }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              color: "#9146FF",
+                              textDecoration: "none",
+                              fontWeight: "bold",
+                              fontSize: "0.85rem",
+                              background: "transparent",
+                            }}
+                            title={`Twitch: ${extractPlatformUsername(app.twitch_channel)}`}
                           >
-                            <ExternalLink size={12} /> Canal
+                            <TwitchIcon size={14} color="#9146FF" />
+                            <span>{extractPlatformUsername(app.twitch_channel)}</span>
                           </a>
                         )}
+                        {app.kick_channel && (
+                          <a
+                            href={`https://kick.com/${extractPlatformUsername(app.kick_channel)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              color: "#53FC18",
+                              textDecoration: "none",
+                              fontWeight: "bold",
+                              fontSize: "0.85rem",
+                              background: "transparent",
+                            }}
+                            title={`Kick: ${extractPlatformUsername(app.kick_channel)}`}
+                          >
+                            <KickIcon size={14} color="#53FC18" />
+                            <span>{extractPlatformUsername(app.kick_channel)}</span>
+                          </a>
+                        )}
+                        {app.youtube_channel && (
+                          <a
+                            href={formatYoutubeUrl(app.youtube_channel)}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              color: "#FF0000",
+                              textDecoration: "none",
+                              fontWeight: "bold",
+                              fontSize: "0.85rem",
+                              background: "transparent",
+                            }}
+                            title={`YouTube: ${extractPlatformUsername(app.youtube_channel)}`}
+                          >
+                            <YoutubeIcon size={14} color="#FF0000" />
+                            <span>{extractPlatformUsername(app.youtube_channel)}</span>
+                          </a>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
                         {app.status !== "approved" && (
                           <button
                             className="btn text-xs"
@@ -1906,10 +2206,11 @@ export default function TournamentDetails() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
+      )}
       </main>
 
       <ConfirmModal
@@ -1989,104 +2290,349 @@ export default function TournamentDetails() {
             className="card"
             style={{
               width: "100%",
-              maxWidth: "500px",
+              maxWidth: "520px",
               padding: "2rem",
               display: "flex",
               flexDirection: "column",
-              gap: "1.5rem",
-              background: "#14161A",
+              gap: "1.25rem",
+              background: "var(--bg-surface)",
               border: "1px solid var(--border-light)",
-              borderRadius: "12px",
+              borderRadius: "14px",
+              boxShadow: "0 16px 40px rgba(0, 0, 0, 0.5)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Tv size={20} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: "1.25rem" }}>Postulación de Caster</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <Tv size={22} color="#9146FF" />
+                <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "bold" }}>
+                  {isGlobalCaster ? "Postulación de Caster al Torneo" : "Rol de Caster Requerido"}
+                </h3>
               </div>
               <button className="btn-icon" onClick={() => setIsCasterModalOpen(false)}>
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleApplyCaster} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                  Alias de Caster *
-                </label>
-                <input
-                  type="text"
-                  className="input-base"
-                  required
-                  placeholder="ej. CastMaster"
-                  value={casterForm.alias}
-                  onChange={(e) => setCasterForm({ ...casterForm, alias: e.target.value })}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                  Canal de Twitch *
-                </label>
-                <input
-                  type="text"
-                  className="input-base"
-                  required
-                  placeholder="ej. nombre_de_usuario o https://twitch.tv/..."
-                  value={casterForm.twitch_channel}
-                  onChange={(e) => setCasterForm({ ...casterForm, twitch_channel: e.target.value })}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                  Canal de YouTube (Opcional)
-                </label>
-                <input
-                  type="text"
-                  className="input-base"
-                  placeholder="ej. @miCanal"
-                  value={casterForm.youtube_channel}
-                  onChange={(e) => setCasterForm({ ...casterForm, youtube_channel: e.target.value })}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                  Biografía / Experiencia (Opcional)
-                </label>
-                <textarea
-                  className="input-base"
-                  rows={3}
-                  placeholder="Cuéntanos brevemente sobre tu experiencia casteando torneos..."
-                  value={casterForm.bio}
-                  onChange={(e) => setCasterForm({ ...casterForm, bio: e.target.value })}
-                  style={{ width: "100%", resize: "vertical" }}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsCasterModalOpen(false)}
-                  disabled={isSubmittingCaster}
+            {!isGlobalCaster ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <div
+                  style={{
+                    background: "rgba(145, 70, 255, 0.1)",
+                    border: "1px solid rgba(145, 70, 255, 0.25)",
+                    borderRadius: "10px",
+                    padding: "1.25rem",
+                  }}
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={isSubmittingCaster}
-                >
-                  {isSubmittingCaster ? "Enviando..." : "Enviar Solicitud"}
-                </button>
+                  <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.95rem", lineHeight: 1.5, color: "var(--text-main)" }}>
+                    Para poder postularte a transmitir las partidas de este torneo, primero necesitas tener el rol general de <strong>Caster Oficial</strong>.
+                  </p>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.45 }}>
+                    Al tener tu rol de Caster en tu cuenta, tu perfil (alias, canal de Twitch, biografía e idiomas) queda guardado para que puedas <strong>postularte a cualquier torneo con 1 solo clic</strong> sin tener que volver a rellenar información cada vez.
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setIsCasterModalOpen(false)}
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setIsCasterModalOpen(false);
+                      router.push("/settings#caster");
+                    }}
+                    style={{
+                      background: "#9146FF",
+                      color: "#FFFFFF",
+                      fontWeight: "bold",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "0.6rem 1.2rem",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <TwitchIcon size={16} /> Postularme para Rol de Caster
+                  </button>
+                </div>
               </div>
-            </form>
+            ) : (
+              <form onSubmit={handleApplyCaster} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div
+                  style={{
+                    background: "rgba(111, 175, 58, 0.1)",
+                    border: "1px solid rgba(111, 175, 58, 0.25)",
+                    borderRadius: "8px",
+                    padding: "0.75rem 1rem",
+                    fontSize: "0.85rem",
+                    color: "var(--text-main)",
+                  }}
+                >
+                  Tienes el rol de <strong>Caster Oficial ({globalCasterProfile?.alias || session?.user?.name})</strong>. Tus datos han sido cargados automáticamente.
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                    Alias de Caster *
+                  </label>
+                  <input
+                    type="text"
+                    className="input-base"
+                    required
+                    placeholder="ej. CastMaster"
+                    value={casterForm.alias}
+                    onChange={(e) => setCasterForm({ ...casterForm, alias: e.target.value })}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                {/* Twitch Channel */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <TwitchIcon size={15} color="#9146FF" /> Canal de Twitch
+                    </span>
+                    {Boolean(casterForm.twitch_channel) ? (
+                      <span style={{ color: "#9146FF", fontSize: "0.75rem", fontWeight: "bold" }}>Vinculado</span>
+                    ) : (
+                      <span style={{ color: "var(--warning)", fontSize: "0.75rem" }}>Opcional</span>
+                    )}
+                  </label>
+                  {Boolean(casterForm.twitch_channel) ? (
+                    <div
+                      style={{
+                        background: "rgba(145, 70, 255, 0.08)",
+                        border: "1px solid rgba(145, 70, 255, 0.3)",
+                        borderRadius: "8px",
+                        padding: "0.6rem 0.85rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        color: "#9146FF",
+                        fontWeight: "bold",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      <span>{extractPlatformUsername(casterForm.twitch_channel)}</span>
+                      <span style={{ fontSize: "0.7rem", color: "var(--muted)", fontWeight: "normal" }}>Bloqueado por cuenta vinculada</span>
+                    </div>
+                  ) : (
+                    <Link
+                      href="/caster"
+                      className="btn"
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        padding: "0.6rem 0.85rem",
+                        borderRadius: "8px",
+                        background: "rgba(145, 70, 255, 0.08)",
+                        border: "1px dashed rgba(145, 70, 255, 0.4)",
+                        color: "#bf94ff",
+                        fontSize: "0.85rem",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <TwitchIcon size={15} color="#9146FF" /> Vincular Twitch en CasterHub
+                    </Link>
+                  )}
+                </div>
+
+                {/* Kick Channel */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <KickIcon size={15} color="#53FC18" /> Canal de Kick
+                    </span>
+                    {Boolean(casterForm.kick_channel) ? (
+                      <span style={{ color: "#53FC18", fontSize: "0.75rem", fontWeight: "bold" }}>Vinculado</span>
+                    ) : (
+                      <span style={{ color: "var(--warning)", fontSize: "0.75rem" }}>Opcional</span>
+                    )}
+                  </label>
+                  {Boolean(casterForm.kick_channel) ? (
+                    <div
+                      style={{
+                        background: "rgba(83, 252, 24, 0.08)",
+                        border: "1px solid rgba(83, 252, 24, 0.3)",
+                        borderRadius: "8px",
+                        padding: "0.6rem 0.85rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        color: "#53FC18",
+                        fontWeight: "bold",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      <span>{extractPlatformUsername(casterForm.kick_channel)}</span>
+                      <span style={{ fontSize: "0.7rem", color: "var(--muted)", fontWeight: "normal" }}>Bloqueado por cuenta vinculada</span>
+                    </div>
+                  ) : (
+                    <Link
+                      href="/caster"
+                      className="btn"
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        padding: "0.6rem 0.85rem",
+                        borderRadius: "8px",
+                        background: "rgba(83, 252, 24, 0.08)",
+                        border: "1px dashed rgba(83, 252, 24, 0.4)",
+                        color: "#53FC18",
+                        fontSize: "0.85rem",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <KickIcon size={15} color="#53FC18" /> Vincular Kick en CasterHub
+                    </Link>
+                  )}
+                </div>
+
+                {/* YouTube Channel (Editable via URL / handle) */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <YoutubeIcon size={15} color="#FF0000" /> Canal de YouTube (Opcional)
+                    </span>
+                    <span style={{ color: "var(--muted)", fontSize: "0.75rem" }}>Por URL o @handle</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="input-base"
+                    placeholder="ej. @miCanal o https://youtube.com/@miCanal"
+                    value={casterForm.youtube_channel}
+                    onChange={(e) => setCasterForm({ ...casterForm, youtube_channel: e.target.value })}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                    Idiomas de Transmisión
+                  </label>
+                  <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", paddingTop: "0.4rem" }}>
+                    {MAIN_CASTER_LANGUAGES.map((lang) => {
+                      const currentLangs = normalizeLanguages(casterForm.languages);
+                      const isChecked = currentLangs.includes(lang);
+                      return (
+                        <label
+                          key={lang}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            padding: "0.5rem 0.95rem",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            userSelect: "none",
+                            fontSize: "0.85rem",
+                            fontWeight: isChecked ? "bold" : "500",
+                            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                            background: isChecked
+                              ? "rgba(111, 175, 58, 0.15)"
+                              : "rgba(255, 255, 255, 0.03)",
+                            border: isChecked
+                              ? "1px solid var(--primary)"
+                              : "1px solid rgba(255, 255, 255, 0.08)",
+                            boxShadow: isChecked
+                              ? "0 0 14px rgba(111, 175, 58, 0.35), inset 0 0 8px rgba(111, 175, 58, 0.1)"
+                              : "none",
+                            color: isChecked ? "#ffffff" : "var(--muted)",
+                            transform: isChecked ? "translateY(-1px)" : "none",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setCasterForm({ ...casterForm, languages: normalizeLanguages([...currentLangs, lang]) });
+                              } else {
+                                setCasterForm({ ...casterForm, languages: currentLangs.filter((l: string) => l !== lang) });
+                              }
+                            }}
+                            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
+                          />
+                          <div
+                            style={{
+                              width: "14px",
+                              height: "14px",
+                              borderRadius: "4px",
+                              border: isChecked ? "1px solid var(--primary)" : "1px solid rgba(255, 255, 255, 0.2)",
+                              background: isChecked ? "var(--primary)" : "rgba(0, 0, 0, 0.2)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {isChecked && (
+                              <svg
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="#000"
+                                strokeWidth="3.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                          <span>{lang}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
+                    Mensaje para el organizador del torneo (Opcional)
+                  </label>
+                  <textarea
+                    className="input-base"
+                    rows={3}
+                    placeholder="Indica tu disponibilidad o experiencia para este torneo en particular..."
+                    value={casterForm.bio}
+                    onChange={(e) => setCasterForm({ ...casterForm, bio: e.target.value })}
+                    style={{ width: "100%", resize: "vertical" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setIsCasterModalOpen(false)}
+                    disabled={isSubmittingCaster}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={isSubmittingCaster}
+                  >
+                    {isSubmittingCaster ? "Enviando..." : "Enviar Postulación"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

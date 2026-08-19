@@ -113,3 +113,66 @@ export async function PATCH(request: Request) {
     );
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await getServerSession(getAuthOptions(request));
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+
+    // 1. Delete caster dependencies
+    try {
+      const { data: caster } = await supabaseAdmin
+        .from("casters")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (caster?.id) {
+        await supabaseAdmin.from("match_casters").delete().eq("caster_id", caster.id);
+      }
+
+      await supabaseAdmin.from("tournament_casters").delete().eq("user_id", userId);
+      await supabaseAdmin.from("caster_applications").delete().eq("user_id", userId);
+      await supabaseAdmin.from("casters").delete().eq("user_id", userId);
+    } catch (e) {
+      console.warn("Error cleaning up caster records:", e);
+    }
+
+    // 2. Delete next_auth sessions and accounts
+    try {
+      await supabaseAdmin.schema("next_auth").from("sessions").delete().eq("userId", userId);
+      await supabaseAdmin.schema("next_auth").from("accounts").delete().eq("userId", userId);
+    } catch (e) {
+      console.warn("Error cleaning up next_auth sessions/accounts:", e);
+    }
+
+    // 4. Delete user records from next_auth and public schemas
+    try {
+      await supabaseAdmin.schema("next_auth").from("users").delete().eq("id", userId);
+    } catch (e) {
+      console.warn("Error deleting next_auth.users:", e);
+    }
+
+    try {
+      await supabaseAdmin.from("users").delete().eq("id", userId);
+    } catch (e) {
+      console.warn("Error deleting public.users:", e);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Tu cuenta ha sido eliminada exitosamente.",
+    });
+  } catch (error: any) {
+    console.error("Delete account error:", error);
+    return NextResponse.json(
+      { error: "Ocurrió un error al eliminar tu cuenta." },
+      { status: 500 }
+    );
+  }
+}
+

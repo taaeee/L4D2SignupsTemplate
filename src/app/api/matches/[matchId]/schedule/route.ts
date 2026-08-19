@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/lib/authOptions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { ensurePublicUser } from "@/lib/ensure-user";
 
 export async function PATCH(
   request: Request,
@@ -12,6 +13,8 @@ export async function PATCH(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    await ensurePublicUser(session.user.id, session.user);
 
     const { matchId } = await params;
     const body = await request.json();
@@ -59,8 +62,37 @@ export async function PATCH(
 
     let hasPermission = isTournamentCreator || isTournamentMod || isTeam1Captain || isTeam2Captain;
 
+    let isCaster = false;
+    let casterProfile: any = null;
+
+    // Check if user is an approved caster in the system
+    const { data: casterRecord } = await supabaseAdmin
+      .from("casters")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (casterRecord) {
+      isCaster = true;
+      casterProfile = casterRecord;
+      hasPermission = true;
+    } else {
+      const { data: appRecord } = await supabaseAdmin
+        .from("caster_applications")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("status", "approved")
+        .maybeSingle();
+
+      if (appRecord) {
+        isCaster = true;
+        casterProfile = appRecord;
+        hasPermission = true;
+      }
+    }
+
     // Check if user is an assigned caster for this match
-    if (!hasPermission) {
+    if (!isCaster) {
       const { data: matchCaster } = await supabaseAdmin
         .from("match_casters")
         .select("*, casters(*)")
@@ -68,6 +100,8 @@ export async function PATCH(
         .maybeSingle();
 
       if (matchCaster && matchCaster.casters?.user_id === userId) {
+        isCaster = true;
+        casterProfile = matchCaster.casters;
         hasPermission = true;
       }
     }
@@ -104,7 +138,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "No tienes permisos para modificar este partido. Debes ser organizador, capitán o integrante con cuenta de Steam vinculada.",
+            "No tienes permisos para modificar este partido. Debes ser organizador, caster, capitán o integrante con cuenta de Steam vinculada.",
         },
         { status: 403 }
       );
@@ -123,11 +157,74 @@ export async function PATCH(
       updatePayload.selected_maps = Array.isArray(selectedMaps) ? selectedMaps : [];
     }
 
-    // Only organizers or casters can change live status / scores directly
-    const canChangeMatchStatus = isTournamentCreator || isTournamentMod;
+    // Organizers, tournament mods, and casters can change live status (e.g. in_progress, pending)
+    const canChangeMatchStatus = isTournamentCreator || isTournamentMod || isCaster;
     if (status !== undefined) {
       if (canChangeMatchStatus || status === "in_progress") {
+        // Enforce: Cannot start transmission (in_progress) without an assigned caster
+        if (status === "in_progress") {
+          const { data: existingMatchCasters } = await supabaseAdmin
+            .from("match_casters")
+            .select("id")
+            .eq("match_id", matchId);
+
+          const hasAssignedCaster = existingMatchCasters && existingMatchCasters.length > 0;
+          const isCallerCaster = isCaster && !!casterProfile;
+
+          if (!hasAssignedCaster && !isCallerCaster) {
+            return NextResponse.json(
+              {
+                error:
+                  "No se puede iniciar la transmisión sin un caster asignado al partido. Por favor asigna un caster primero.",
+                requiresCasterAssignment: true,
+              },
+              { status: 400 }
+            );
+          }
+        }
+
         updatePayload.status = status;
+
+        // If a caster is starting the transmission and is not yet in match_casters, auto-link them without overwriting existing stream_url
+        if (status === "in_progress" && isCaster && casterProfile) {
+          try {
+            const casterId = casterProfile.id;
+            const { data: existingMC } = await supabaseAdmin
+              .from("match_casters")
+              .select("id, stream_url")
+              .eq("match_id", matchId)
+              .maybeSingle();
+
+            if (!existingMC && casterId) {
+              const defaultStream =
+                (casterProfile.primary_platform === "kick" && casterProfile.kick_channel
+                  ? (casterProfile.kick_channel.startsWith("http") ? casterProfile.kick_channel : `https://kick.com/${casterProfile.kick_channel}`)
+                  : "") ||
+                (casterProfile.primary_platform === "youtube" && casterProfile.youtube_channel
+                  ? casterProfile.youtube_channel
+                  : "") ||
+                (casterProfile.kick_channel ? (casterProfile.kick_channel.startsWith("http") ? casterProfile.kick_channel : `https://kick.com/${casterProfile.kick_channel}`) : "") ||
+                (casterProfile.youtube_channel || "") ||
+                (casterProfile.twitch_channel ? (casterProfile.twitch_channel.startsWith("http") ? casterProfile.twitch_channel : `https://twitch.tv/${casterProfile.twitch_channel}`) : "") ||
+                "";
+
+              if (defaultStream) {
+                await supabaseAdmin.from("match_casters").upsert(
+                  {
+                    match_id: matchId,
+                    caster_id: casterId,
+                    stream_url: defaultStream,
+                    is_primary: true,
+                    created_at: new Date().toISOString(),
+                  },
+                  { onConflict: "match_id,caster_id" }
+                );
+              }
+            }
+          } catch (e) {
+            console.warn("Could not auto-bind caster on stream start:", e);
+          }
+        }
       }
     }
 

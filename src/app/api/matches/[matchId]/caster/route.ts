@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/lib/authOptions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { ensurePublicUser } from "@/lib/ensure-user";
 
 export async function POST(
   request: Request,
@@ -28,7 +29,11 @@ export async function POST(
       .maybeSingle();
 
     let casterId = caster?.id;
-    let defaultStream = caster?.twitch_channel || "";
+    let defaultStream =
+      (caster?.kick_channel ? (caster.kick_channel.startsWith("http") ? caster.kick_channel : `https://kick.com/${caster.kick_channel}`) : "") ||
+      (caster?.youtube_channel || "") ||
+      (caster?.twitch_channel ? (caster.twitch_channel.startsWith("http") ? caster.twitch_channel : `https://twitch.tv/${caster.twitch_channel}`) : "") ||
+      "";
 
     if (!caster) {
       // Fallback check in caster_applications
@@ -47,6 +52,8 @@ export async function POST(
       }
 
       // Auto create caster record from app
+      await ensurePublicUser(app.user_id);
+
       const { data: newCaster } = await supabaseAdmin
         .from("casters")
         .upsert(
@@ -55,6 +62,7 @@ export async function POST(
             alias: app.alias,
             bio: app.bio,
             twitch_channel: app.twitch_channel,
+            kick_channel: app.kick_channel,
             youtube_channel: app.youtube_channel,
           },
           { onConflict: "user_id" }
@@ -63,7 +71,14 @@ export async function POST(
         .single();
 
       casterId = newCaster?.id || app.id;
-      defaultStream = newCaster?.twitch_channel || app.twitch_channel || "";
+      defaultStream =
+        (newCaster?.kick_channel ? (newCaster.kick_channel.startsWith("http") ? newCaster.kick_channel : `https://kick.com/${newCaster.kick_channel}`) : "") ||
+        newCaster?.youtube_channel ||
+        (newCaster?.twitch_channel ? (newCaster.twitch_channel.startsWith("http") ? newCaster.twitch_channel : `https://twitch.tv/${newCaster.twitch_channel}`) : "") ||
+        (app.kick_channel ? (app.kick_channel.startsWith("http") ? app.kick_channel : `https://kick.com/${app.kick_channel}`) : "") ||
+        app.youtube_channel ||
+        (app.twitch_channel ? (app.twitch_channel.startsWith("http") ? app.twitch_channel : `https://twitch.tv/${app.twitch_channel}`) : "") ||
+        "";
     }
 
     if (!casterId) {
@@ -99,9 +114,20 @@ export async function POST(
       );
     }
 
+    // If startStreamNow is true, set match status to in_progress
+    const { startStreamNow } = body;
+    if (startStreamNow) {
+      await supabaseAdmin
+        .from("matches")
+        .update({ status: "in_progress", updated_at: new Date().toISOString() })
+        .eq("id", matchId);
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Transmisión vinculada al match exitosamente.",
+      message: startStreamNow
+        ? "Transmisión asignada y partido iniciado EN VIVO."
+        : "Transmisión vinculada al match exitosamente.",
       matchCaster: data,
     });
   } catch (error: any) {

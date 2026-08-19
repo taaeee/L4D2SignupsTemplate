@@ -21,7 +21,8 @@ export async function GET(request: Request) {
           logo_url,
           bracket_status,
           creator_id,
-          moderators
+          moderators,
+          template_json
         ),
         team1:teams!matches_team1_id_fkey (
           id,
@@ -31,7 +32,11 @@ export async function GET(request: Request) {
           creator_id,
           team_members (
             id,
-            steam_id_64
+            name,
+            steam_id_64,
+            role,
+            l4d2_playtime_hours,
+            is_profile_private
           )
         ),
         team2:teams!matches_team2_id_fkey (
@@ -42,7 +47,11 @@ export async function GET(request: Request) {
           creator_id,
           team_members (
             id,
-            steam_id_64
+            name,
+            steam_id_64,
+            role,
+            l4d2_playtime_hours,
+            is_profile_private
           )
         )
       `
@@ -123,7 +132,17 @@ export async function GET(request: Request) {
           assigned_casters: assignedCasters,
           primary_stream_url:
             assignedCasters[0]?.stream_url ||
-            assignedCasters[0]?.casters?.twitch_channel ||
+            (assignedCasters[0]?.casters?.kick_channel
+              ? (assignedCasters[0].casters.kick_channel.startsWith("http")
+                ? assignedCasters[0].casters.kick_channel
+                : `https://kick.com/${assignedCasters[0].casters.kick_channel}`)
+              : null) ||
+            (assignedCasters[0]?.casters?.youtube_channel || null) ||
+            (assignedCasters[0]?.casters?.twitch_channel
+              ? (assignedCasters[0].casters.twitch_channel.startsWith("http")
+                ? assignedCasters[0].casters.twitch_channel
+                : `https://twitch.tv/${assignedCasters[0].casters.twitch_channel}`)
+              : null) ||
             null,
         };
       });

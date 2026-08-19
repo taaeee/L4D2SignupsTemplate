@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/lib/authOptions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getTwitchUserById } from "@/lib/twitch";
+import { getKickUserById } from "@/lib/kick";
 
 export async function GET(request: Request) {
   try {
@@ -13,7 +15,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabaseAdmin
       .schema("next_auth")
       .from("accounts")
-      .select("provider, providerAccountId")
+      .select("provider, providerAccountId, access_token")
       .eq("userId", session.user.id);
 
     if (error) {
@@ -21,7 +23,56 @@ export async function GET(request: Request) {
       return NextResponse.json({ accounts: [] });
     }
 
-    return NextResponse.json({ accounts: data || [] });
+    let accounts = data || [];
+
+    // Enrich accounts
+    accounts = await Promise.all(
+      accounts.map(async (acc) => {
+        if (acc.provider === "twitch" && acc.providerAccountId) {
+          try {
+            const twitchUser = await getTwitchUserById(acc.providerAccountId);
+            if (twitchUser) {
+              return {
+                ...acc,
+                username: twitchUser.login,
+                displayName: twitchUser.display_name,
+                avatar: twitchUser.profile_image_url,
+              };
+            }
+          } catch (e) {
+            console.warn("Could not enrich twitch user:", e);
+          }
+        } else if (acc.provider === "kick" && acc.providerAccountId) {
+          try {
+            const kickUser = await getKickUserById(acc.providerAccountId);
+            if (kickUser) {
+              return {
+                ...acc,
+                username: kickUser.name,
+                displayName: kickUser.name,
+                avatar: kickUser.profile_picture,
+              };
+            }
+          } catch (e) {
+            console.warn("Could not enrich kick user:", e);
+          }
+          return {
+            ...acc,
+            username: acc.providerAccountId,
+            displayName: acc.providerAccountId,
+          };
+        } else if (acc.provider === "google") {
+          return {
+            ...acc,
+            username: session.user.name || "Google User",
+            displayName: session.user.name || "Google User",
+          };
+        }
+        return acc;
+      })
+    );
+
+    return NextResponse.json({ accounts });
   } catch (error: any) {
     console.error("Accounts API error:", error);
     return NextResponse.json({ accounts: [] });

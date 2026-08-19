@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { enrichCasterList } from "@/lib/caster-enrichment";
 
 export async function GET() {
   try {
@@ -10,7 +11,8 @@ export async function GET() {
       .order("alias", { ascending: true });
 
     if (!castersError && casters && casters.length > 0) {
-      return NextResponse.json({ casters });
+      const enriched = await enrichCasterList(casters);
+      return NextResponse.json({ casters: enriched });
     }
 
     // 2. Fallback to approved caster_applications if casters table is empty/new
@@ -26,10 +28,12 @@ export async function GET() {
         .select("*")
         .eq("status", "approved");
 
-      return NextResponse.json({ casters: simpleApps || [] });
+      const enriched = await enrichCasterList(simpleApps || []);
+      return NextResponse.json({ casters: enriched });
     }
 
-    return NextResponse.json({ casters: applications || [] });
+    const enriched = await enrichCasterList(applications || []);
+    return NextResponse.json({ casters: enriched });
   } catch (error: any) {
     console.error("Casters API error:", error);
     return NextResponse.json({ casters: [] });

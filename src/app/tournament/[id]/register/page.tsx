@@ -294,7 +294,7 @@ export default function RegisterTeam() {
     }
   };
 
-  if (status === "loading" || isLoading) return <LoadingSpinner text="Cargando..." fullHeight={true} />;
+  if ((status === "loading" || isLoading) && !tournament) return <LoadingSpinner text="Cargando..." fullHeight={true} />;
   if (!tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Torneo no encontrado.</div>;
 
   const tpl = tournament.template_json;

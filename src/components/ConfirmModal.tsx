@@ -62,7 +62,7 @@ export default function ConfirmModal({
           )}
           
           <h3 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>{title}</h3>
-          <p className="text-muted" style={{ marginBottom: "2rem", fontSize: "0.95rem" }}>{message}</p>
+          <div className="text-muted" style={{ marginBottom: "2rem", fontSize: "0.95rem" }}>{message}</div>
           
           <div style={{ display: "flex", gap: "1rem", width: "100%" }}>
             <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onCancel}>

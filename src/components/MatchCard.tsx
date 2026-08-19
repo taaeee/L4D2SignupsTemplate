@@ -1,5 +1,6 @@
-import React from 'react';
-import { Trophy } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trophy, GripVertical } from 'lucide-react';
+import { Database } from '@/lib/database.types';
 
 interface Team {
   id: string;
@@ -7,8 +8,6 @@ interface Team {
   status?: string;
   logo_url?: string;
 }
-
-import { Database } from '@/lib/database.types';
 
 type Match = Database['public']['Tables']['matches']['Row'];
 
@@ -22,14 +21,29 @@ interface MatchCardProps {
     pending1?: string;
     pending2?: string;
   };
+  isDndEnabled?: boolean;
+  onSlotDragStart?: (matchId: string, slot: 1 | 2, teamId: string) => void;
+  onSlotDrop?: (targetMatchId: string, targetSlot: 1 | 2) => void;
 }
 
-export default function MatchCard({ match, teamMap, canManage, onClick, matchNumber, feeders }: MatchCardProps) {
+export default function MatchCard({
+  match,
+  teamMap,
+  canManage,
+  onClick,
+  matchNumber,
+  feeders,
+  isDndEnabled = false,
+  onSlotDragStart,
+  onSlotDrop,
+}: MatchCardProps) {
+  const [dragOverSlot, setDragOverSlot] = useState<1 | 2 | null>(null);
+
   const team1 = match.team1_id ? teamMap[match.team1_id] || null : null;
   const team2 = match.team2_id ? teamMap[match.team2_id] || null : null;
 
   const isCompleted = match.status === 'completed';
-  
+
   const getTeamStyle = (teamId?: string | null) => {
     if (!isCompleted) return { color: 'var(--text-main)', fontWeight: 'normal' };
     if (match.winner_id === teamId) return { color: 'var(--success)', fontWeight: 'bold' };
@@ -129,7 +143,7 @@ export default function MatchCard({ match, teamMap, canManage, onClick, matchNum
         </span>
       );
     }
-    
+
     // Pick the specific feeder for this slot
     const feeder = slotIndex === 1 ? feeders?.pending1 : feeders?.pending2;
     if (feeder) {
@@ -142,19 +156,23 @@ export default function MatchCard({ match, teamMap, canManage, onClick, matchNum
 
   const handleMouseEnter = (teamId?: string | null) => {
     if (!teamId) return;
-    document.querySelectorAll(`.team-slot-${teamId}`).forEach(el => el.classList.add('hover-highlight'));
-    document.querySelectorAll(`.match-card-team-${teamId}`).forEach(el => el.classList.add('hover-card-highlight'));
+    document.querySelectorAll(`.team-slot-${teamId}`).forEach((el) => el.classList.add('hover-highlight'));
+    document.querySelectorAll(`.match-card-team-${teamId}`).forEach((el) => el.classList.add('hover-card-highlight'));
   };
 
   const handleMouseLeave = (teamId?: string | null) => {
     if (!teamId) return;
-    document.querySelectorAll(`.team-slot-${teamId}`).forEach(el => el.classList.remove('hover-highlight'));
-    document.querySelectorAll(`.match-card-team-${teamId}`).forEach(el => el.classList.remove('hover-card-highlight'));
+    document.querySelectorAll(`.team-slot-${teamId}`).forEach((el) => el.classList.remove('hover-highlight'));
+    document.querySelectorAll(`.match-card-team-${teamId}`).forEach((el) => el.classList.remove('hover-card-highlight'));
   };
 
   return (
-    <div 
-      onClick={() => canManage && onClick && onClick(match, team1, team2)}
+    <div
+      onClick={() => {
+        if (canManage && onClick && !isDndEnabled) {
+          onClick(match, team1, team2);
+        }
+      }}
       style={{
         width: '250px',
         background: 'rgba(0,0,0,0.4)',
@@ -162,68 +180,170 @@ export default function MatchCard({ match, teamMap, canManage, onClick, matchNum
         borderRadius: '6px',
         overflow: 'hidden',
         boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-        cursor: canManage ? 'pointer' : 'default',
+        cursor: canManage && !isDndEnabled ? 'pointer' : 'default',
         transition: 'transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
         position: 'relative',
-        ...(canManage ? { ':hover': { transform: 'scale(1.02)' } } : {})
       }}
       className={`match-card ${match.team1_id ? 'match-card-team-' + match.team1_id : ''} ${match.team2_id ? 'match-card-team-' + match.team2_id : ''}`}
     >
-      {/* Top Half: Team 1 */}
-      <div 
+      {/* Top Half: Team 1 Slot */}
+      <div
+        draggable={isDndEnabled && Boolean(team1)}
+        onDragStart={(e) => {
+          if (isDndEnabled && match.team1_id) {
+            e.stopPropagation();
+            e.dataTransfer.setData('text/plain', JSON.stringify({ matchId: match.id, slot: 1, teamId: match.team1_id }));
+            onSlotDragStart?.(match.id, 1, match.team1_id);
+          }
+        }}
+        onDragOver={(e) => {
+          if (isDndEnabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverSlot(1);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (isDndEnabled) {
+            e.stopPropagation();
+            setDragOverSlot(null);
+          }
+        }}
+        onDrop={(e) => {
+          if (isDndEnabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverSlot(null);
+            onSlotDrop?.(match.id, 1);
+          }
+        }}
         onMouseEnter={() => handleMouseEnter(match.team1_id)}
         onMouseLeave={() => handleMouseLeave(match.team1_id)}
         className={`team-slot ${match.team1_id ? 'team-slot-' + match.team1_id : ''}`}
-        style={{ 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-        padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)',
-        background: match.winner_id === match.team1_id ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
-        minHeight: '36px',
-        transition: 'background 0.2s ease'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingRight: '8px' }}>
-          {match.winner_id === match.team1_id && <Trophy size={14} color="var(--success)" style={{ flexShrink: 0 }} />}
-          <span style={{ 
-            ...getTeamStyle(match.team1_id),
-            fontSize: '0.9rem',
-            wordBreak: 'break-word'
-          }}>
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '8px 12px',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          background:
+            dragOverSlot === 1
+              ? 'rgba(111, 175, 58, 0.25)'
+              : match.winner_id === match.team1_id
+              ? 'rgba(34, 197, 94, 0.05)'
+              : 'transparent',
+          minHeight: '36px',
+          cursor: isDndEnabled && Boolean(team1) ? 'grab' : undefined,
+          transition: 'background 0.2s ease, outline 0.15s ease',
+          outline: dragOverSlot === 1 ? '2px dashed var(--primary)' : 'none',
+          outlineOffset: '-2px',
+        }}
+        title={isDndEnabled && Boolean(team1) ? 'Arrastra este equipo para reubicarlo' : undefined}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, paddingRight: '8px', minWidth: 0 }}>
+          {isDndEnabled && Boolean(team1) && (
+            <GripVertical size={13} style={{ color: 'var(--text-muted)', flexShrink: 0, opacity: 0.7 }} />
+          )}
+          {match.winner_id === match.team1_id && (
+            <Trophy size={14} color="var(--success)" style={{ flexShrink: 0 }} />
+          )}
+          <span
+            style={{
+              ...getTeamStyle(match.team1_id),
+              fontSize: '0.9rem',
+              wordBreak: 'break-word',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {renderTeamName(match.team1_id, team1, 1)}
           </span>
         </div>
-        <span style={{ fontSize: '0.9rem', ...getScoreStyle(match.team1_id) }}>
+        <span style={{ fontSize: '0.9rem', ...getScoreStyle(match.team1_id), flexShrink: 0 }}>
           {isCompleted && match.team1_id ? match.score1 : ''}
         </span>
       </div>
 
-      {/* Bottom Half: Team 2 */}
-      <div 
+      {/* Bottom Half: Team 2 Slot */}
+      <div
+        draggable={isDndEnabled && Boolean(team2)}
+        onDragStart={(e) => {
+          if (isDndEnabled && match.team2_id) {
+            e.stopPropagation();
+            e.dataTransfer.setData('text/plain', JSON.stringify({ matchId: match.id, slot: 2, teamId: match.team2_id }));
+            onSlotDragStart?.(match.id, 2, match.team2_id);
+          }
+        }}
+        onDragOver={(e) => {
+          if (isDndEnabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverSlot(2);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (isDndEnabled) {
+            e.stopPropagation();
+            setDragOverSlot(null);
+          }
+        }}
+        onDrop={(e) => {
+          if (isDndEnabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverSlot(null);
+            onSlotDrop?.(match.id, 2);
+          }
+        }}
         onMouseEnter={() => handleMouseEnter(match.team2_id)}
         onMouseLeave={() => handleMouseLeave(match.team2_id)}
         className={`team-slot ${match.team2_id ? 'team-slot-' + match.team2_id : ''}`}
-        style={{ 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-        padding: '8px 12px',
-        background: match.winner_id === match.team2_id ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
-        minHeight: '36px',
-        transition: 'background 0.2s ease'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingRight: '8px' }}>
-          {match.winner_id === match.team2_id && <Trophy size={14} color="var(--success)" style={{ flexShrink: 0 }} />}
-          <span style={{ 
-            ...getTeamStyle(match.team2_id),
-            fontSize: '0.9rem',
-            wordBreak: 'break-word'
-          }}>
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '8px 12px',
+          background:
+            dragOverSlot === 2
+              ? 'rgba(111, 175, 58, 0.25)'
+              : match.winner_id === match.team2_id
+              ? 'rgba(34, 197, 94, 0.05)'
+              : 'transparent',
+          minHeight: '36px',
+          cursor: isDndEnabled && Boolean(team2) ? 'grab' : undefined,
+          transition: 'background 0.2s ease, outline 0.15s ease',
+          outline: dragOverSlot === 2 ? '2px dashed var(--primary)' : 'none',
+          outlineOffset: '-2px',
+        }}
+        title={isDndEnabled && Boolean(team2) ? 'Arrastra este equipo para reubicarlo' : undefined}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, paddingRight: '8px', minWidth: 0 }}>
+          {isDndEnabled && Boolean(team2) && (
+            <GripVertical size={13} style={{ color: 'var(--text-muted)', flexShrink: 0, opacity: 0.7 }} />
+          )}
+          {match.winner_id === match.team2_id && (
+            <Trophy size={14} color="var(--success)" style={{ flexShrink: 0 }} />
+          )}
+          <span
+            style={{
+              ...getTeamStyle(match.team2_id),
+              fontSize: '0.9rem',
+              wordBreak: 'break-word',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {renderTeamName(match.team2_id, team2, 2)}
           </span>
         </div>
-        <span style={{ fontSize: '0.9rem', ...getScoreStyle(match.team2_id) }}>
+        <span style={{ fontSize: '0.9rem', ...getScoreStyle(match.team2_id), flexShrink: 0 }}>
           {isCompleted && match.team2_id ? match.score2 : ''}
         </span>
       </div>
 
-      {/* Match number overlay: middle vertically, all the way to the right */}
+      {/* Match number overlay */}
       {matchNumber && (
         <div
           style={{
@@ -243,7 +363,7 @@ export default function MatchCard({ match, teamMap, canManage, onClick, matchNum
             zIndex: 2,
             boxShadow: '-1px 0 6px rgba(0,0,0,0.6)',
             pointerEvents: 'none',
-            letterSpacing: '0.5px'
+            letterSpacing: '0.5px',
           }}
         >
           M{matchNumber}

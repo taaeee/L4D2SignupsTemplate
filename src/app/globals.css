@@ -112,6 +112,29 @@ button {
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
 }
 
+.tournament-link-badge {
+  text-decoration: none !important;
+  transition: all var(--transition);
+}
+
+.tournament-link-badge:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(111, 175, 58, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.my-registrations-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 768px) {
+  .my-registrations-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Inputs */
 .input-base {
   width: 100%;
@@ -200,12 +223,14 @@ button {
 }
 
 .social-icon {
-  transition: transform var(--transition), filter var(--transition) !important;
+  background: transparent !important;
+  border: none !important;
+  transition: transform var(--transition), filter var(--transition), opacity var(--transition) !important;
 }
 
 .social-icon:hover {
-  transform: scale(1.15) translateY(-2px);
-  filter: brightness(1.2);
+  transform: scale(1.18) translateY(-2px);
+  filter: brightness(1.25);
   background: transparent !important;
 }
 
@@ -373,3 +398,35 @@ button {
   color: var(--primary);
   border-bottom: 2px solid var(--primary);
 }
+
+/* Micro-animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modalFadeIn {
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

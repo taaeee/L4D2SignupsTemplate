@@ -1,25 +1,38 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { LinkIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { LinkIcon, Swords, ArrowRight, ShieldCheck, Check, Sparkles, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 let cachedTournaments: any = null;
 let cachedMaps: any = null;
 
-export default function MapVetoDashboard() {
+function MapVetoDashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // URL Query Params
+  const queryMatchId = searchParams.get("matchId");
+  const queryTournamentId = searchParams.get("tournamentId");
+  const queryTeamA = searchParams.get("teamA");
+  const queryTeamB = searchParams.get("teamB");
+  const queryFormat = searchParams.get("format");
+  const queryMaps = searchParams.get("maps");
+
   const [tournaments, setTournaments] = useState<any[]>(cachedTournaments || []);
-  const [selectedTournament, setSelectedTournament] = useState("");
+  const [selectedTournament, setSelectedTournament] = useState(queryTournamentId || "");
   const [teams, setTeams] = useState<any[]>([]);
-  const [selectedTeamA, setSelectedTeamA] = useState("");
-  const [selectedTeamB, setSelectedTeamB] = useState("");
-  const [format, setFormat] = useState("bo1");
+  const [selectedTeamA, setSelectedTeamA] = useState(queryTeamA || "");
+  const [selectedTeamB, setSelectedTeamB] = useState(queryTeamB || "");
+  const [format, setFormat] = useState(
+    queryFormat === "bo2" ? "to2" : queryFormat || "bo1"
+  );
+  const [linkedMatchId, setLinkedMatchId] = useState<string | null>(queryMatchId || null);
   const [isLoading, setIsLoading] = useState(!cachedTournaments || !cachedMaps);
 
   const [allMaps, setAllMaps] = useState<any[]>(cachedMaps || []);
@@ -40,11 +53,43 @@ export default function MapVetoDashboard() {
       fetchMaps();
       cleanupOldVetoes();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, status]);
+
+  // If maps are passed in query params
+  useEffect(() => {
+    if (queryMaps) {
+      try {
+        const parsed = decodeURIComponent(queryMaps)
+          .split(",")
+          .map((m) => m.trim())
+          .filter(Boolean);
+        if (parsed.length > 0) {
+          setSelectedMaps(parsed);
+        }
+      } catch (e) {
+        console.warn("Could not parse query maps:", e);
+      }
+    }
+  }, [queryMaps]);
+
+  // When tournament selection changes or queryTournamentId changes
+  useEffect(() => {
+    if (selectedTournament) {
+      fetchTeams(selectedTournament);
+    } else {
+      setTeams([]);
+      setSelectedTeamA("");
+      setSelectedTeamB("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTournament]);
 
   const cleanupOldVetoes = async () => {
     try {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const twentyFourHoursAgo = new Date(
+        Date.now() - 24 * 60 * 60 * 1000
+      ).toISOString();
       await supabase
         .from("map_vetoes")
         .delete()
@@ -54,48 +99,60 @@ export default function MapVetoDashboard() {
     }
   };
 
-  useEffect(() => {
-    if (selectedTournament) {
-      fetchTeams(selectedTournament);
-    } else {
-      setTeams([]);
-      setSelectedTeamA("");
-      setSelectedTeamB("");
-    }
-  }, [selectedTournament]);
-
   const fetchTournaments = async () => {
     if (!cachedTournaments) setIsLoading(true);
 
-    // Fetch Tournaments (created)
-    const { data: createdTournaments } = await supabase
-      .from("tournaments")
-      .select("id, name, creator_id, moderators")
-      .eq("creator_id", session!.user!.id);
+    try {
+      // 1. Fetch Tournaments (created)
+      const { data: createdTournaments } = await supabase
+        .from("tournaments")
+        .select("id, name, creator_id, moderators")
+        .eq("creator_id", session!.user!.id);
 
-    // Fetch Tournaments (moderated)
-    const { data: moderatedTournaments } = await supabase
-      .from("tournaments")
-      .select("id, name, creator_id, moderators")
-      .contains("moderators", JSON.stringify([session!.user!.id]));
+      // 2. Fetch Tournaments (moderated)
+      const { data: moderatedTournaments } = await supabase
+        .from("tournaments")
+        .select("id, name, creator_id, moderators")
+        .contains("moderators", JSON.stringify([session!.user!.id]));
 
-    const allTournaments = [
-      ...(createdTournaments || []),
-      ...(moderatedTournaments || []),
-    ];
+      // 3. If queryTournamentId is passed and not in user list (e.g. caster or player creating veto)
+      let queryTourney: any[] = [];
+      if (queryTournamentId) {
+        const { data: specificTourney } = await supabase
+          .from("tournaments")
+          .select("id, name, creator_id, moderators")
+          .eq("id", queryTournamentId);
+        if (specificTourney) {
+          queryTourney = specificTourney;
+        }
+      }
 
-    // Remove duplicates
-    const uniqueTournaments = Array.from(
-      new Map(allTournaments.map((t) => [t.id, t])).values()
-    );
+      const allTournaments = [
+        ...(createdTournaments || []),
+        ...(moderatedTournaments || []),
+        ...queryTourney,
+      ];
 
-    cachedTournaments = uniqueTournaments;
-    setTournaments(uniqueTournaments);
-    if (cachedMaps) setIsLoading(false);
+      // Remove duplicates
+      const uniqueTournaments = Array.from(
+        new Map(allTournaments.map((t) => [t.id, t])).values()
+      );
+
+      cachedTournaments = uniqueTournaments;
+      setTournaments(uniqueTournaments);
+
+      if (queryTournamentId) {
+        setSelectedTournament(queryTournamentId);
+      }
+    } catch (e) {
+      console.error("Error loading tournaments for veto:", e);
+    } finally {
+      if (cachedMaps) setIsLoading(false);
+    }
   };
 
   const fetchTeams = async (tournamentId: string) => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("teams")
       .select("id, name, logo_url")
       .eq("tournament_id", tournamentId)
@@ -103,6 +160,13 @@ export default function MapVetoDashboard() {
 
     if (data) {
       setTeams(data);
+      // If query teams were specified, pre-select them
+      if (queryTeamA && data.some((t) => t.id === queryTeamA)) {
+        setSelectedTeamA(queryTeamA);
+      }
+      if (queryTeamB && data.some((t) => t.id === queryTeamB)) {
+        setSelectedTeamB(queryTeamB);
+      }
     }
   };
 
@@ -110,28 +174,47 @@ export default function MapVetoDashboard() {
     try {
       const res = await fetch("/api/maps");
       const data = await res.json();
-      const sortedMaps = data.all.sort((a: any, b: any) => a.name.localeCompare(b.name));
+      const sortedMaps = data.all.sort((a: any, b: any) =>
+        a.name.localeCompare(b.name)
+      );
       cachedMaps = sortedMaps;
       setAllMaps(sortedMaps);
-      if (cachedTournaments) setIsLoading(false);
+
+      // If no query maps were passed and selectedMaps is empty, select all default official maps
+      if (!queryMaps && selectedMaps.length === 0) {
+        const official = sortedMaps
+          .filter((m: any) => m.type === "official")
+          .map((m: any) => m.name);
+        if (official.length > 0) {
+          setSelectedMaps(official);
+        }
+      }
     } catch (e) {
       console.error("Error fetching maps", e);
+    } finally {
       if (cachedTournaments) setIsLoading(false);
     }
   };
 
   const handleRandomPool = () => {
-    const filtered = allMaps.filter((map: any) => mapFilter === "all" || map.type === mapFilter);
+    const filtered = allMaps.filter(
+      (map: any) => mapFilter === "all" || map.type === mapFilter
+    );
     const shuffled = [...filtered].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, randomCount).map((m: any) => m.name);
     setSelectedMaps(selected);
   };
 
-  const generateToken = () => Math.random().toString(36).substr(2, 9);
+  const generateToken = () => Math.random().toString(36).substring(2, 11);
 
   const handleCreateVeto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTournament || !selectedTeamA || !selectedTeamB || selectedTeamA === selectedTeamB) {
+    if (
+      !selectedTournament ||
+      !selectedTeamA ||
+      !selectedTeamB ||
+      selectedTeamA === selectedTeamB
+    ) {
       toast.error("Selecciona un torneo y dos equipos diferentes.");
       return;
     }
@@ -140,13 +223,17 @@ export default function MapVetoDashboard() {
     const teamBToken = generateToken();
 
     try {
-      const visibleMaps = allMaps.filter((map: any) => map.name.toLowerCase().includes(searchMap.toLowerCase()) && (mapFilter === "all" || map.type === mapFilter));
+      const visibleMaps = allMaps.filter(
+        (map: any) =>
+          map.name.toLowerCase().includes(searchMap.toLowerCase()) &&
+          (mapFilter === "all" || map.type === mapFilter)
+      );
 
       const poolMaps = visibleMaps
         .filter((m: any) => selectedMaps.includes(m.name))
         .map((m: any) => ({
           ...m,
-          status: "available"
+          status: "available",
         }));
 
       if (poolMaps.length === 0) {
@@ -158,7 +245,7 @@ export default function MapVetoDashboard() {
         status: "in_progress",
         currentTurn: selectedTeamA,
         history: [],
-        maps: poolMaps
+        maps: poolMaps,
       };
 
       const { data, error } = await supabase
@@ -170,18 +257,29 @@ export default function MapVetoDashboard() {
           format: format,
           team_a_token: teamAToken,
           team_b_token: teamBToken,
-          state: initialState
+          state: initialState,
+          match_id: linkedMatchId || null,
         })
         .select()
         .single();
 
       if (error) throw error;
 
+      // If linked to a match, update the match's map_veto_id
+      if (linkedMatchId) {
+        await supabase
+          .from("matches")
+          .update({ map_veto_id: data.id })
+          .eq("id", linkedMatchId);
+      }
+
       setGeneratedVeto(data);
       toast.success("Veto creado exitosamente.");
     } catch (e) {
       console.error("Veto creation error:", e);
-      toast.error(`Error: ${(e as any).message || (e as any).details || JSON.stringify(e)}`);
+      toast.error(
+        `Error: ${(e as any).message || (e as any).details || JSON.stringify(e)}`
+      );
     }
   };
 
@@ -191,110 +289,256 @@ export default function MapVetoDashboard() {
     toast.success("¡Enlace copiado!");
   };
 
-  if (isLoading) {
-    return <LoadingSpinner text="Cargando..." fullHeight={true} />;
+  if (isLoading && (!cachedTournaments || !cachedMaps)) {
+    return <LoadingSpinner text="Cargando Veto de Mapas..." fullHeight={true} />;
   }
 
+  const teamAName = teams.find((t) => t.id === selectedTeamA)?.name || "Equipo A";
+  const teamBName = teams.find((t) => t.id === selectedTeamB)?.name || "Equipo B";
+
   return (
-    <div className="container" style={{ maxWidth: "800px", padding: "2rem" }}>
-      <h1 style={{ textAlign: "center", color: "var(--primary)" }}>Map Veto Creator</h1>
-      <p style={{ textAlign: "center", color: "var(--muted)", marginBottom: "2rem" }}>
-        Crea un enlace para vetar mapas entre dos equipos de tus torneos.
-      </p>
+    <div className="container" style={{ maxWidth: "900px", padding: "2rem 1rem" }}>
+      <header style={{ textAlign: "center", marginBottom: "2rem" }}>
+        <h1 style={{ fontSize: "2rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
+          <span className="text-gradient">Map Veto</span> Creator
+        </h1>
+        <p className="text-muted text-sm" style={{ margin: 0 }}>
+          Genera una sesión interactiva de veto de mapas por turnos para dos equipos
+        </p>
+      </header>
+
+      {/* Linked Match Info Banner */}
+      {linkedMatchId && (
+        <div
+          style={{
+            background: "rgba(111, 175, 58, 0.1)",
+            border: "1px solid rgba(111, 175, 58, 0.3)",
+            borderRadius: "10px",
+            padding: "1rem 1.25rem",
+            marginBottom: "1.5rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              style={{
+                background: "rgba(111, 175, 58, 0.2)",
+                padding: "0.5rem",
+                borderRadius: "8px",
+                display: "flex",
+              }}
+            >
+              <Swords size={20} color="var(--primary)" />
+            </div>
+            <div>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: "bold",
+                  color: "var(--primary)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                Partido Vinculado
+              </span>
+              <h4 style={{ margin: 0, fontSize: "1rem" }}>
+                {teamAName} vs {teamBName}
+              </h4>
+              <p className="text-muted text-xs" style={{ margin: 0 }}>
+                Los mapas resultantes del veto se guardarán automáticamente en el horario del partido al finalizar.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary text-xs"
+            onClick={() => setLinkedMatchId(null)}
+            style={{ padding: "0.3rem 0.6rem" }}
+          >
+            Desvincular
+          </button>
+        </div>
+      )}
 
       {!generatedVeto ? (
-        <form onSubmit={handleCreateVeto} className="card">
+        <form onSubmit={handleCreateVeto} className="card" style={{ padding: "1.75rem" }}>
+          {/* Tournament Selection */}
           <div className="form-group" style={{ marginBottom: "1.5rem" }}>
-            <label>Torneo</label>
+            <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
+              Torneo
+            </label>
             <select
               className="input-base"
               value={selectedTournament}
               onChange={(e) => setSelectedTournament(e.target.value)}
               required
+              style={{ width: "100%", padding: "0.6rem" }}
             >
               <option value="">Selecciona un torneo...</option>
               {tournaments.map((t: any) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
               ))}
             </select>
           </div>
 
-          <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
-            <div className="form-group" style={{ flex: 1 }}>
-              <label>Equipo A</label>
+          {/* Teams Selection */}
+          <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+            <div className="form-group" style={{ flex: "1 1 250px" }}>
+              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
+                Equipo A (Inicia el veto)
+              </label>
               <select
                 className="input-base"
                 value={selectedTeamA}
                 onChange={(e) => setSelectedTeamA(e.target.value)}
                 required
                 disabled={!selectedTournament || teams.length === 0}
+                style={{ width: "100%", padding: "0.6rem" }}
               >
                 <option value="">Selecciona equipo A...</option>
                 {teams.map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
                 ))}
               </select>
             </div>
 
-            <div className="form-group" style={{ flex: 1 }}>
-              <label>Equipo B</label>
+            <div className="form-group" style={{ flex: "1 1 250px" }}>
+              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
+                Equipo B (Segundo turno)
+              </label>
               <select
                 className="input-base"
                 value={selectedTeamB}
                 onChange={(e) => setSelectedTeamB(e.target.value)}
                 required
                 disabled={!selectedTournament || teams.length === 0}
+                style={{ width: "100%", padding: "0.6rem" }}
               >
                 <option value="">Selecciona equipo B...</option>
                 {teams.map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
+          {/* Format Selection */}
           <div className="form-group" style={{ marginBottom: "2rem" }}>
-            <label>Formato</label>
+            <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
+              Formato de Veto / Cantidad de Mapas
+            </label>
             <select
               className="input-base"
               value={format}
               onChange={(e) => setFormat(e.target.value)}
+              style={{ width: "100%", padding: "0.6rem" }}
             >
-              <option value="bo1">One map</option>
-              <option value="to2">Total of 2 (2 mapas)</option>
-              <option value="bo3">Best of 3 (3 mapas)</option>
-              <option value="bo5">Best of 5 (5 mapas)</option>
+              <option value="bo1">Al Mejor de 1 (BO1 - 1 Mapa)</option>
+              <option value="to2">Al Mejor de 2 (TO2 - 2 Mapas)</option>
+              <option value="bo3">Al Mejor de 3 (BO3 - 3 Mapas)</option>
+              <option value="bo5">Al Mejor de 5 (BO5 - 5 Mapas)</option>
             </select>
           </div>
 
+          {/* Map Pool Configuration */}
           <div style={{ marginBottom: "2rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
-              <label style={{ margin: 0 }}>Map Pool (Mapas disponibles)</label>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
+            >
+              <div>
+                <label style={{ margin: 0, fontWeight: "bold", fontSize: "0.95rem" }}>
+                  Map Pool ({selectedMaps.length} seleccionados)
+                </label>
+                <p className="text-muted text-xs" style={{ margin: "0.2rem 0 0" }}>
+                  Elige los mapas que estarán disponibles para banear y elegir en esta sesión.
+                </p>
+              </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button type="button" className="btn btn-secondary text-sm" onClick={() => setSelectedMaps(allMaps.filter((map: any) => map.name.toLowerCase().includes(searchMap.toLowerCase()) && (mapFilter === "all" || map.type === mapFilter)).map((m: any) => m.name))}>Seleccionar Todos</button>
-                <button type="button" className="btn btn-secondary text-sm" onClick={() => setSelectedMaps([])}>Deseleccionar Todos</button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  onClick={() =>
+                    setSelectedMaps(
+                      allMaps
+                        .filter(
+                          (map: any) =>
+                            map.name.toLowerCase().includes(searchMap.toLowerCase()) &&
+                            (mapFilter === "all" || map.type === mapFilter)
+                        )
+                        .map((m: any) => m.name)
+                    )
+                  }
+                >
+                  Seleccionar Todos
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  onClick={() => setSelectedMaps([])}
+                >
+                  Limpiar Pool
+                </button>
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: "1px solid var(--border-light)" }}>
-              <label style={{ margin: 0, whiteSpace: "nowrap" }}>Generar Aleatorio:</label>
+            {/* Random Pool Generator Tool */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                marginBottom: "1rem",
+                padding: "0.75rem 1rem",
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: "8px",
+                border: "1px solid var(--border-light)",
+                flexWrap: "wrap",
+              }}
+            >
+              <label style={{ margin: 0, fontSize: "0.85rem" }}>Generar Aleatorio:</label>
               <input
                 type="number"
                 className="input-base"
                 value={randomCount}
-                onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
-                style={{ width: "80px", textAlign: "center" }}
+                onChange={(e) =>
+                  setRandomCount(Math.max(1, parseInt(e.target.value) || 1))
+                }
+                style={{ width: "70px", textAlign: "center", padding: "0.3rem" }}
                 min="1"
                 max={allMaps.length}
               />
-              <button type="button" className="btn btn-secondary text-sm" onClick={handleRandomPool}>
-                Generar
+              <button
+                type="button"
+                className="btn btn-secondary text-xs"
+                onClick={handleRandomPool}
+              >
+                Generar Pool
               </button>
-              <span className="text-sm text-muted" style={{ marginLeft: "auto" }}>
-                Filtrado actual: {allMaps.filter((map: any) => mapFilter === "all" || map.type === mapFilter).length} mapas
+              <span className="text-xs text-muted" style={{ marginLeft: "auto" }}>
+                Total disponible: {allMaps.filter((map: any) => mapFilter === "all" || map.type === mapFilter).length} mapas
               </span>
             </div>
 
+            {/* Search and Filters */}
             <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
               <input
                 type="text"
@@ -302,13 +546,13 @@ export default function MapVetoDashboard() {
                 placeholder="Buscar mapa..."
                 value={searchMap}
                 onChange={(e) => setSearchMap(e.target.value)}
-                style={{ flex: 1, minWidth: "200px" }}
+                style={{ flex: "1 1 200px", padding: "0.5rem" }}
               />
               <select
                 className="input-base"
                 value={mapFilter}
                 onChange={(e) => setMapFilter(e.target.value)}
-                style={{ minWidth: "150px" }}
+                style={{ minWidth: "150px", padding: "0.5rem" }}
               >
                 <option value="all">Todos los tipos</option>
                 <option value="official">Oficiales</option>
@@ -316,108 +560,288 @@ export default function MapVetoDashboard() {
               </select>
             </div>
 
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+            {/* Available & Selected Maps Columns */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem" }}>
               {/* Available Maps Panel */}
-              <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <h4 style={{ margin: 0, color: "var(--primary)" }}>Mapas Disponibles</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.5rem", maxHeight: "300px", overflowY: "auto", padding: "1rem", background: "rgba(0,0,0,0.2)", borderRadius: "8px", border: "1px solid var(--border-light)", alignContent: "start" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--primary)" }}>
+                  Mapas Disponibles (Haz clic para agregar)
+                </h4>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                    gap: "0.5rem",
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                    padding: "0.75rem",
+                    background: "rgba(0,0,0,0.3)",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-light)",
+                    alignContent: "start",
+                  }}
+                >
                   {allMaps
                     .filter((map: any) => !selectedMaps.includes(map.name))
-                    .filter((map: any) => map.name.toLowerCase().includes(searchMap.toLowerCase()) && (mapFilter === "all" || map.type === mapFilter))
+                    .filter(
+                      (map: any) =>
+                        map.name.toLowerCase().includes(searchMap.toLowerCase()) &&
+                        (mapFilter === "all" || map.type === mapFilter)
+                    )
                     .map((map: any) => (
-                    <button
-                      key={map.name}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMaps([...selectedMaps, map.name]);
-                        setHoveredAvailableMap(null);
-                      }}
-                      style={{ padding: "0.5rem", textAlign: "center", background: hoveredAvailableMap === map.name ? "rgba(74, 222, 128, 0.2)" : "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px", cursor: "pointer", fontSize: "0.85rem", whiteSpace: "normal", wordBreak: "break-word", transition: "background 0.2s", color: "var(--text-main)" }}
-                      onMouseEnter={() => setHoveredAvailableMap(map.name)}
-                      onMouseLeave={() => setHoveredAvailableMap(null)}
-                      title="Haz clic para agregar"
-                    >
-                      {map.name}
-                    </button>
-                  ))}
+                      <button
+                        key={map.name}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMaps([...selectedMaps, map.name]);
+                          setHoveredAvailableMap(null);
+                        }}
+                        style={{
+                          padding: "0.45rem 0.6rem",
+                          textAlign: "center",
+                          background:
+                            hoveredAvailableMap === map.name
+                              ? "rgba(111, 175, 58, 0.2)"
+                              : "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          color: "var(--text-main)",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseEnter={() => setHoveredAvailableMap(map.name)}
+                        onMouseLeave={() => setHoveredAvailableMap(null)}
+                      >
+                        + {map.name}
+                      </button>
+                    ))}
                   {allMaps.filter((map: any) => !selectedMaps.includes(map.name)).length === 0 && (
-                    <p className="text-muted text-sm" style={{ gridColumn: "1 / -1", textAlign: "center" }}>No hay mapas disponibles</p>
+                    <p className="text-muted text-xs" style={{ gridColumn: "1 / -1", textAlign: "center", margin: "1rem 0" }}>
+                      Todos los mapas están seleccionados
+                    </p>
                   )}
                 </div>
               </div>
 
               {/* Selected Maps Panel */}
-              <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <h4 style={{ margin: 0, color: "var(--success)" }}>Mapas Seleccionados ({selectedMaps.length})</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.5rem", maxHeight: "300px", overflowY: "auto", padding: "1rem", background: "rgba(74, 222, 128, 0.05)", borderRadius: "8px", border: "1px solid var(--success)", alignContent: "start" }}>
-                  {selectedMaps.map(mapName => (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--success)" }}>
+                  Pool Activo ({selectedMaps.length} mapas - Haz clic para quitar)
+                </h4>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                    gap: "0.5rem",
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                    padding: "0.75rem",
+                    background: "rgba(34, 197, 94, 0.05)",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(34, 197, 94, 0.3)",
+                    alignContent: "start",
+                  }}
+                >
+                  {selectedMaps.map((mapName) => (
                     <button
                       key={mapName}
                       type="button"
                       onClick={() => {
-                        setSelectedMaps(selectedMaps.filter(m => m !== mapName));
+                        setSelectedMaps(selectedMaps.filter((m) => m !== mapName));
                         setHoveredSelectedMap(null);
                       }}
-                      style={{ padding: "0.5rem", textAlign: "center", background: "var(--success)", border: "none", color: "#000", fontWeight: "bold", borderRadius: "4px", cursor: "pointer", fontSize: "0.85rem", whiteSpace: "normal", wordBreak: "break-word", transition: "opacity 0.2s", opacity: hoveredSelectedMap === mapName ? "0.8" : "1" }}
+                      style={{
+                        padding: "0.45rem 0.6rem",
+                        textAlign: "center",
+                        background:
+                          hoveredSelectedMap === mapName
+                            ? "rgba(239, 68, 68, 0.8)"
+                            : "var(--primary)",
+                        border: "none",
+                        color: "#000",
+                        fontWeight: "bold",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "0.8rem",
+                        transition: "all 0.15s",
+                      }}
                       onMouseEnter={() => setHoveredSelectedMap(mapName)}
                       onMouseLeave={() => setHoveredSelectedMap(null)}
-                      title="Haz clic para quitar"
+                      title="Haz clic para quitar del pool"
                     >
-                      {mapName}
+                      {hoveredSelectedMap === mapName ? `x ${mapName}` : mapName}
                     </button>
                   ))}
                   {selectedMaps.length === 0 && (
-                    <p className="text-muted text-sm" style={{ gridColumn: "1 / -1", textAlign: "center" }}>No has seleccionado ningún mapa</p>
+                    <p className="text-muted text-xs" style={{ gridColumn: "1 / -1", textAlign: "center", margin: "1rem 0" }}>
+                      No has seleccionado ningún mapa en el pool
+                    </p>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ width: "100%", fontSize: "1.2rem" }}>
-            Generar Enlaces de Veto
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{
+              width: "100%",
+              padding: "0.8rem",
+              fontSize: "1.1rem",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <Sparkles size={20} /> Generar Enlaces de Veto
           </button>
         </form>
       ) : (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          <h2 style={{ color: "var(--success)", textAlign: "center", margin: 0 }}>¡Veto Generado!</h2>
-
-          <div style={{ background: "rgba(0,0,0,0.3)", padding: "1.5rem", borderRadius: "8px" }}>
-            <h3 style={{ margin: "0 0 1rem 0" }}>Espectadores</h3>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <input type="text" readOnly className="input-base" value={`${window.location.origin}/map-veto/${generatedVeto.id}`} style={{ flex: 1 }} />
-              <button className="btn-icon" onClick={() => copyLink(`/map-veto/${generatedVeto.id}`)}>
-                <LinkIcon />
-              </button>
+        /* Veto Result Links */
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "2rem" }}>
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "50px",
+                height: "50px",
+                borderRadius: "50%",
+                background: "rgba(34, 197, 94, 0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 1rem",
+              }}
+            >
+              <Check size={28} color="var(--success)" />
             </div>
-            <p className="text-muted text-sm" style={{ marginTop: "0.5rem" }}>Comparte este enlace para que otros vean el veto en vivo.</p>
+            <h2 style={{ color: "var(--success)", margin: "0 0 0.5rem" }}>¡Veto Generado con Éxito!</h2>
+            <p className="text-muted text-sm" style={{ margin: 0 }}>
+              Comparte los enlaces correspondientes con los capitanes de cada equipo y con los espectadores.
+            </p>
           </div>
 
-          <div style={{ background: "rgba(0,0,0,0.3)", padding: "1.5rem", borderRadius: "8px", borderLeft: "4px solid var(--primary)" }}>
-            <h3 style={{ margin: "0 0 1rem 0" }}>Capitán: {teams.find((t: any) => t.id === selectedTeamA)?.name || "Equipo A"}</h3>
+          {/* Spectator Link */}
+          <div style={{ background: "rgba(0,0,0,0.3)", padding: "1.25rem", borderRadius: "10px", border: "1px solid var(--border-light)" }}>
+            <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>Enlace para Espectadores y Casters</h4>
             <div style={{ display: "flex", gap: "0.5rem" }}>
-              <input type="text" readOnly className="input-base" value={`${window.location.origin}/map-veto/${generatedVeto.id}?token=${generatedVeto.team_a_token}`} style={{ flex: 1 }} />
-              <button className="btn-icon" onClick={() => copyLink(`/map-veto/${generatedVeto.id}?token=${generatedVeto.team_a_token}`)}>
-                <LinkIcon />
+              <input
+                type="text"
+                readOnly
+                className="input-base"
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/map-veto/${generatedVeto.id}`}
+                style={{ flex: 1, fontSize: "0.85rem" }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => copyLink(`/map-veto/${generatedVeto.id}`)}
+                style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
+              >
+                <LinkIcon size={14} /> Copiar
               </button>
             </div>
           </div>
 
-          <div style={{ background: "rgba(0,0,0,0.3)", padding: "1.5rem", borderRadius: "8px", borderLeft: "4px solid var(--warning)" }}>
-            <h3 style={{ margin: "0 0 1rem 0" }}>Capitán: {teams.find((t: any) => t.id === selectedTeamB)?.name || "Equipo B"}</h3>
+          {/* Captain A Link */}
+          <div
+            style={{
+              background: "rgba(0,0,0,0.3)",
+              padding: "1.25rem",
+              borderRadius: "10px",
+              borderLeft: "4px solid var(--primary)",
+              borderTop: "1px solid var(--border-light)",
+              borderRight: "1px solid var(--border-light)",
+              borderBottom: "1px solid var(--border-light)",
+            }}
+          >
+            <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem", color: "var(--primary)" }}>
+              Capitán de {teamAName} (Turno 1)
+            </h4>
             <div style={{ display: "flex", gap: "0.5rem" }}>
-              <input type="text" readOnly className="input-base" value={`${window.location.origin}/map-veto/${generatedVeto.id}?token=${generatedVeto.team_b_token}`} style={{ flex: 1 }} />
-              <button className="btn-icon" onClick={() => copyLink(`/map-veto/${generatedVeto.id}?token=${generatedVeto.team_b_token}`)}>
-                <LinkIcon />
+              <input
+                type="text"
+                readOnly
+                className="input-base"
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/map-veto/${generatedVeto.id}?token=${generatedVeto.team_a_token}`}
+                style={{ flex: 1, fontSize: "0.85rem" }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => copyLink(`/map-veto/${generatedVeto.id}?token=${generatedVeto.team_a_token}`)}
+                style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
+              >
+                <LinkIcon size={14} /> Copiar
               </button>
             </div>
           </div>
 
-          <button className="btn btn-secondary" onClick={() => setGeneratedVeto(null)}>
-            Crear otro Veto
-          </button>
+          {/* Captain B Link */}
+          <div
+            style={{
+              background: "rgba(0,0,0,0.3)",
+              padding: "1.25rem",
+              borderRadius: "10px",
+              borderLeft: "4px solid var(--warning)",
+              borderTop: "1px solid var(--border-light)",
+              borderRight: "1px solid var(--border-light)",
+              borderBottom: "1px solid var(--border-light)",
+            }}
+          >
+            <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem", color: "var(--warning)" }}>
+              Capitán de {teamBName} (Turno 2)
+            </h4>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <input
+                type="text"
+                readOnly
+                className="input-base"
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/map-veto/${generatedVeto.id}?token=${generatedVeto.team_b_token}`}
+                style={{ flex: 1, fontSize: "0.85rem" }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => copyLink(`/map-veto/${generatedVeto.id}?token=${generatedVeto.team_b_token}`)}
+                style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
+              >
+                <LinkIcon size={14} /> Copiar
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ flex: 1 }}
+              onClick={() => router.push(`/map-veto/${generatedVeto.id}`)}
+            >
+              Ir a la Sala de Veto
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1 }}
+              onClick={() => setGeneratedVeto(null)}
+            >
+              Crear Otro Veto
+            </button>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+export default function MapVetoDashboard() {
+  return (
+    <Suspense fallback={<LoadingSpinner text="Cargando Veto de Mapas..." fullHeight={true} />}>
+      <MapVetoDashboardContent />
+    </Suspense>
   );
 }

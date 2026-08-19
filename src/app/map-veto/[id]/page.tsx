@@ -35,8 +35,24 @@ export default function MapVetoInterface() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "map_vetoes", filter: `id=eq.${id}` },
-        (payload) => {
+        async (payload: any) => {
           setVetoSession(payload.new);
+          if (payload.new?.state?.status === "completed" && payload.new?.match_id) {
+            const pickedMapNames = (payload.new.state.maps || [])
+              .filter((m: any) => m.status === "picked")
+              .map((m: any) => m.name);
+
+            if (pickedMapNames.length > 0) {
+              await fetch(`/api/matches/${payload.new.match_id}/sync-maps`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  selectedMaps: pickedMapNames,
+                  mapVetoId: id,
+                }),
+              }).catch((e) => console.warn("Auto-sync error:", e));
+            }
+          }
         }
       )
       .subscribe();
@@ -202,7 +218,7 @@ export default function MapVetoInterface() {
       .update({ state: newState })
       .eq("id", id as string);
 
-    // If veto is completed and linked to a match, auto-sync selected maps to match schedule
+    // If veto is completed and linked to a match, auto-sync selected maps to match schedule via server API
     if (status === "completed" && vetoSession.match_id) {
       try {
         const pickedMapNames = finalMaps
@@ -210,10 +226,17 @@ export default function MapVetoInterface() {
           .map((m: any) => m.name);
 
         if (pickedMapNames.length > 0) {
-          await supabase
-            .from("matches")
-            .update({ selected_maps: pickedMapNames })
-            .eq("id", vetoSession.match_id);
+          const syncRes = await fetch(`/api/matches/${vetoSession.match_id}/sync-maps`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              selectedMaps: pickedMapNames,
+              mapVetoId: id,
+            }),
+          });
+          if (syncRes.ok) {
+            toast.success("Mapas sincronizados con el partido exitosamente.");
+          }
         }
       } catch (e) {
         console.warn("Could not sync maps to match:", e);
