@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { CheckCircle, XCircle, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "@/components/ConfirmModal";
+import { useTranslation } from "@/lib/i18n";
 
 export default function MapVetoInterface() {
   const { id } = useParams();
@@ -16,6 +17,7 @@ export default function MapVetoInterface() {
   const token = searchParams.get("token");
   const { data: session } = useSession();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [vetoSession, setVetoSession] = useState<any>(null);
   const [teamA, setTeamA] = useState<any>(null);
@@ -94,7 +96,7 @@ export default function MapVetoInterface() {
 
     if (error) {
       console.error(error);
-      toast.error("Veto no encontrado.");
+      toast.error(t("map_veto.veto_not_found"));
     } else {
       setVetoSession(data);
     }
@@ -151,18 +153,18 @@ export default function MapVetoInterface() {
     const myTeamId = isTeamA ? vetoSession.team_a_id : isTeamB ? vetoSession.team_b_id : null;
 
     if (!myTeamId) {
-      toast.error("Eres espectador. No puedes votar.");
+      toast.error(t("map_veto.spectator_vote_error"));
       return;
     }
 
     if (myTeamId !== vetoSession.state.currentTurn) {
-      toast.error("No es tu turno.");
+      toast.error(t("map_veto.not_your_turn_error"));
       return;
     }
 
     const map = vetoSession.state.maps.find((m: any) => m.name === mapName);
     if (map.status !== "available") {
-      toast.error("Este mapa ya no está disponible.");
+      toast.error(t("map_veto.map_not_available"));
       return;
     }
 
@@ -235,7 +237,7 @@ export default function MapVetoInterface() {
             }),
           });
           if (syncRes.ok) {
-            toast.success("Mapas sincronizados con el partido exitosamente.");
+            toast.success(t("map_veto.maps_synced_success"));
           }
         }
       } catch (e) {
@@ -247,15 +249,15 @@ export default function MapVetoInterface() {
   const handleEndVeto = async () => {
     const { error } = await supabase.from("map_vetoes").delete().eq("id", id as string);
     if (!error) {
-      toast.success("Veto finalizado y eliminado de la base de datos.");
+      toast.success(t("map_veto.veto_deleted_success"));
       router.push("/map-veto");
     } else {
-      toast.error("Hubo un error al eliminar el veto.");
+      toast.error(t("common.error_network"));
     }
   };
 
   if (isLoading || !vetoSession || !teamA || !teamB) {
-    return <LoadingSpinner text="Cargando Veto..." fullHeight={true} />;
+    return <LoadingSpinner fullHeight={true} />;
   }
 
   const isTeamA = token === vetoSession.team_a_token;
@@ -281,11 +283,11 @@ export default function MapVetoInterface() {
       <div style={{ textAlign: "center", marginBottom: "2rem" }}>
         <h1 style={{ color: "var(--primary)", margin: "0 0 0.5rem 0", fontSize: "2.5rem" }}>Map Veto</h1>
         <h3 style={{ margin: 0, color: "var(--muted)" }}>
-          Formato: <span style={{ color: "#fff", textTransform: "uppercase" }}>{vetoSession.format}</span>
+          {t("map_veto.format_label")}: <span style={{ color: "#fff", textTransform: "uppercase" }}>{vetoSession.format}</span>
         </h3>
         {isSpectator && (
           <span className="badge" style={{ background: "rgba(255,255,255,0.1)", marginTop: "1rem" }}>
-            Modo Espectador
+            {t("map_veto.spectator_mode_badge")}
           </span>
         )}
       </div>
@@ -294,17 +296,17 @@ export default function MapVetoInterface() {
       {isAdmin && (
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <button className="btn" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", background: "var(--danger)", color: "#fff", padding: "0.5rem 1rem", borderRadius: "8px", fontWeight: "bold" }} onClick={() => setIsDeleteModalOpen(true)}>
-            <Trash2 size={18} /> Terminar Veto y Limpiar
+            <Trash2 size={18} /> {t("map_veto.end_and_clear_btn")}
           </button>
         </div>
       )}
 
       <ConfirmModal
         isOpen={isDeleteModalOpen}
-        title="Terminar Veto"
-        message="¿Estás seguro de que deseas terminar y eliminar este veto? Esta acción borrará el veto permanentemente."
-        confirmText="Eliminar"
-        cancelText="Cancelar"
+        title={t("map_veto.end_veto_title")}
+        message={t("map_veto.end_veto_msg")}
+        confirmText={t("common.delete")}
+        cancelText={t("common.cancel")}
         isDanger={true}
         onConfirm={handleEndVeto}
         onCancel={() => setIsDeleteModalOpen(false)}
@@ -316,7 +318,7 @@ export default function MapVetoInterface() {
         <div style={{ textAlign: "center", opacity: vetoSession.state.currentTurn === teamA.id ? 1 : 0.5, transition: "opacity 0.3s" }}>
           <img src={teamA.logo_url || `https://ui-avatars.com/api/?name=${teamA.name}`} alt={teamA.name} style={{ width: "100px", height: "100px", borderRadius: "50%", objectFit: "cover", border: isTeamA ? "4px solid var(--primary)" : "4px solid transparent" }} />
           <h2 style={{ margin: "0.5rem 0 0 0" }}>{teamA.name}</h2>
-          {isTeamA && <span style={{ color: "var(--primary)", fontSize: "0.8rem", fontWeight: "bold" }}>Tú</span>}
+          {isTeamA && <span style={{ color: "var(--primary)", fontSize: "0.8rem", fontWeight: "bold" }}>{t("map_veto.you")}</span>}
         </div>
 
         <div style={{ fontSize: "3rem", fontWeight: "900", color: "rgba(255,255,255,0.2)" }}>VS</div>
@@ -325,28 +327,26 @@ export default function MapVetoInterface() {
         <div style={{ textAlign: "center", opacity: vetoSession.state.currentTurn === teamB.id ? 1 : 0.5, transition: "opacity 0.3s" }}>
           <img src={teamB.logo_url || `https://ui-avatars.com/api/?name=${teamB.name}`} alt={teamB.name} style={{ width: "100px", height: "100px", borderRadius: "50%", objectFit: "cover", border: isTeamB ? "4px solid var(--primary)" : "4px solid transparent" }} />
           <h2 style={{ margin: "0.5rem 0 0 0" }}>{teamB.name}</h2>
-          {isTeamB && <span style={{ color: "var(--primary)", fontSize: "0.8rem", fontWeight: "bold" }}>Tú</span>}
+          {isTeamB && <span style={{ color: "var(--primary)", fontSize: "0.8rem", fontWeight: "bold" }}>{t("map_veto.you")}</span>}
         </div>
       </div>
 
       {/* Turn Indicator */}
       <div style={{ textAlign: "center", marginBottom: "2rem", padding: "1rem", background: "rgba(0,0,0,0.3)", borderRadius: "8px", border: isMyTurn ? `1px solid ${expectedAction === "pick" ? "var(--success)" : "var(--danger)"}` : "1px solid var(--border-light)" }}>
         {vetoSession.state.status === "completed" ? (
-          <h2 style={{ color: "var(--success)", margin: 0 }}>¡Veto Finalizado!</h2>
+          <h2 style={{ color: "var(--success)", margin: 0 }}>{t("map_veto.veto_finished")}</h2>
         ) : (
           <h2 style={{ margin: 0 }}>
             {isMyTurn ? (
               <span style={{ color: expectedAction === "pick" ? "var(--success)" : "var(--danger)" }}>
-                ¡Es tu turno de {expectedAction === "pick" ? "ELEGIR" : "VETAR"}!
+                {expectedAction === "pick" ? t("map_veto.your_turn_pick") : t("map_veto.your_turn_ban")}
               </span>
             ) : (
-              <span>Turno de {currentTurnTeam?.name} ({expectedAction === "pick" ? "Elegir" : "Vetar"})</span>
+              <span>{t("map_veto.team_turn")} {currentTurnTeam?.name} ({expectedAction === "pick" ? t("map_veto.pick_action") : t("map_veto.ban_action")})</span>
             )}
           </h2>
         )}
       </div>
-
-
 
       {/* Maps Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "1.5rem" }}>
@@ -357,7 +357,6 @@ export default function MapVetoInterface() {
           
           const historyEntry = vetoSession.state.history.find((h: any) => h.mapName === map.name);
           const actingTeam = historyEntry ? (historyEntry.teamId === teamA.id ? teamA : teamB) : null;
-          
           
           return (
             <div
@@ -409,7 +408,7 @@ export default function MapVetoInterface() {
                   <XCircle size={64} color="var(--danger)" />
                   {actingTeam && (
                     <div style={{ background: "rgba(0,0,0,0.8)", color: "var(--danger)", padding: "4px 8px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold", marginTop: "8px", whiteSpace: "nowrap" }}>
-                      Vetado por {actingTeam.name}
+                      {t("map_veto.banned_by")} {actingTeam.name}
                     </div>
                   )}
                 </div>
@@ -428,8 +427,6 @@ export default function MapVetoInterface() {
           );
         })}
       </div>
-
-
     </div>
   );
 }

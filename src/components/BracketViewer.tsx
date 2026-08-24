@@ -5,7 +5,8 @@ import MatchCard from './MatchCard';
 import ScoreModal from './ScoreModal';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Layers, X, Check, Search } from 'lucide-react';
+import { Layers, X, Check, Search, Shuffle } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 interface Team {
   id: string;
@@ -36,6 +37,7 @@ export interface RoundMetaObj {
 let cachedAppMaps: any[] | null = null;
 
 export default function BracketViewer({ matches, teams, canManage, onMatchUpdated, tournament }: BracketViewerProps) {
+  const { t } = useTranslation();
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [selectedTeam1, setSelectedTeam1] = useState<Team | null>(null);
   const [selectedTeam2, setSelectedTeam2] = useState<Team | null>(null);
@@ -470,8 +472,8 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
               i > 0 ? (100 * Math.pow(2, i - 1)) / m1Count : 0;
             const roundKey = `${title || 'null'}-${roundIndex}`;
             const roundTitle = roundsMap[roundIndex][0]?.is_grand_final
-              ? 'Gran Final'
-              : `Ronda ${roundIndex}`;
+              ? t('brackets.grand_final')
+              : t('brackets.round_name', { num: roundIndex });
             const meta = getRoundMeta(roundKey);
 
             return (
@@ -537,7 +539,7 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
                           fontWeight: 'bold',
                           cursor: 'pointer',
                         }}
-                        title="Selecciona la cantidad de mapas a jugar en esta ronda"
+                        title="Selecciona el formato de mapas para esta ronda"
                       >
                         <option value="bo1">1 Map</option>
                         <option value="to2">BO2</option>
@@ -566,10 +568,10 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
                             meta.maps.length > 0 ? 'var(--primary)' : 'var(--muted)',
                         }}
                         onClick={() => handleOpenMapPool(roundKey, roundTitle)}
-                        title="Configurar el pool de mapas (oficiales y custom) para esta ronda"
+                        title={t('brackets.manage_round_pool')}
                       >
                         <Layers size={12} />
-                        {meta.maps.length > 0 ? `${meta.maps.length} Mapas` : 'Pool'}
+                        {meta.maps.length > 0 ? `${meta.maps.length} ${t('tournament_create.maps_title')}` : 'Pool'}
                       </button>
                     </div>
                   ) : (
@@ -603,26 +605,26 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
                             padding: '0.1rem 0.4rem',
                             borderRadius: '4px',
                           }}
-                          title={`Mapas del pool: ${meta.maps.join(', ')}`}
                         >
-                          {meta.maps.length} Mapas
+                          {meta.maps.length} {t('tournament_create.maps_title')}
                         </span>
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* Matches Column */}
+                {/* Matches Column with SVG Orthogonal Connectors */}
                 <div
                   style={{
-                    flex: 1,
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-around',
+                    flex: 1,
+                    gap: '2rem',
                     position: 'relative',
                   }}
                 >
-                  {roundsMap[roundIndex].map((match) => (
+                  {roundsMap[roundIndex].map((match, matchIdx) => (
                     <div
                       key={match.id}
                       style={{
@@ -631,6 +633,7 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
                         alignItems: 'center',
                       }}
                     >
+                      {/* Incoming Connector */}
                       {i > 0 && (
                         <div
                           style={{
@@ -749,7 +752,7 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
             fontSize: '0.85rem',
           }}
         >
-          <span style={{ fontSize: '1.1rem' }}>🔀</span>
+          <Shuffle size={18} color="var(--primary)" />
           <div>
             <strong style={{ color: 'var(--primary)' }}>Ajuste de emparejamientos activo:</strong>{' '}
             <span className="text-muted">
@@ -784,10 +787,10 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
         ubM1,
         tournament?.tournament_format === 'double_elimination' ||
           (tournament?.template_json as any)?.tournamentFormat === 'double_elimination'
-          ? 'Upper Bracket'
+          ? t('brackets.winners_bracket')
           : null
       )}
-      {renderBracketSection(lbRoundKeys, lbRounds, lbM1, 'Lower Bracket')}
+      {renderBracketSection(lbRoundKeys, lbRounds, lbM1, t('brackets.losers_bracket'))}
 
       {/* Score Modal */}
       {selectedMatch && (
@@ -801,15 +804,15 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
         />
       )}
 
-      {/* Map Pool Configuration Modal (Official & Custom Maps) */}
+      {/* Dynamic Map Pool Modal */}
       {mapPoolModal.isOpen && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 9999,
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(6px)',
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -818,165 +821,127 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
           onClick={() => setMapPoolModal((prev) => ({ ...prev, isOpen: false }))}
         >
           <div
-            className="card"
+            className="card animate-modalFadeIn"
             style={{
               width: '100%',
               maxWidth: '650px',
-              padding: '2rem',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '1.75rem',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.25rem',
-              background: '#14161A',
-              border: '1px solid var(--border-light)',
-              borderRadius: '14px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Layers size={20} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: '1.25rem' }}>
-                  Pool de Mapas: {mapPoolModal.roundTitle}
-                </h3>
-              </div>
-              <button
-                className="btn-icon"
-                onClick={() => setMapPoolModal((prev) => ({ ...prev, isOpen: false }))}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <p className="text-muted text-sm" style={{ margin: 0 }}>
-              Selecciona qué mapas (oficiales y customs) formarán el pool para esta ronda. Al crear un veto para un partido de esta ronda, se precargarán automáticamente.
-            </p>
-
-            {/* Filter Tabs & Search */}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '0.3rem' }}>
-                <button
-                  type="button"
-                  className={`btn text-xs ${mapFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '0.3rem 0.6rem' }}
-                  onClick={() => setMapFilter('all')}
-                >
-                  Todos ({availableMaps.length})
-                </button>
-                <button
-                  type="button"
-                  className={`btn text-xs ${mapFilter === 'official' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '0.3rem 0.6rem' }}
-                  onClick={() => setMapFilter('official')}
-                >
-                  Oficiales ({availableMaps.filter((m) => m.type === 'official').length})
-                </button>
-                <button
-                  type="button"
-                  className={`btn text-xs ${mapFilter === 'custom' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '0.3rem 0.6rem' }}
-                  onClick={() => setMapFilter('custom')}
-                >
-                  Customs ({availableMaps.filter((m) => m.type === 'custom').length})
-                </button>
-              </div>
-
-              {/* Search */}
-              <div style={{ flex: 1, minWidth: '150px', position: 'relative' }}>
-                <input
-                  type="text"
-                  className="input-base text-xs"
-                  placeholder="Buscar mapa..."
-                  value={searchMap}
-                  onChange={(e) => setSearchMap(e.target.value)}
-                  style={{ width: '100%', padding: '0.35rem 0.6rem' }}
-                />
-              </div>
-            </div>
-
-            {/* Quick Actions */}
+            {/* Modal Header */}
             <div
               style={{
                 display: 'flex',
-                gap: '0.5rem',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                flexWrap: 'wrap',
+                borderBottom: '1px solid var(--border-light)',
+                paddingBottom: '0.75rem',
               }}
             >
-              <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary)' }}>
-                {mapPoolModal.selectedMaps.length} mapas seleccionados en el pool
-              </span>
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary text-xs"
-                  onClick={() =>
-                    setMapPoolModal((prev) => ({
-                      ...prev,
-                      selectedMaps: availableMaps.map((m) => m.name),
-                    }))
-                  }
-                >
-                  Todos
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary text-xs"
-                  onClick={() =>
-                    setMapPoolModal((prev) => ({
-                      ...prev,
-                      selectedMaps: availableMaps
-                        .filter((m) => m.type === 'official')
-                        .map((m) => m.name),
-                    }))
-                  }
-                >
-                  Solo Oficiales
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary text-xs"
-                  onClick={() =>
-                    setMapPoolModal((prev) => ({
-                      ...prev,
-                      selectedMaps: availableMaps
-                        .filter((m) => m.type === 'custom')
-                        .map((m) => m.name),
-                    }))
-                  }
-                >
-                  Solo Customs
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary text-xs"
-                  onClick={() => setMapPoolModal((prev) => ({ ...prev, selectedMaps: [] }))}
-                >
-                  Limpiar
-                </button>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--primary)' }}>
+                  {t('brackets.manage_round_pool')}: {mapPoolModal.roundTitle}
+                </h3>
+                <p className="text-muted text-xs" style={{ margin: '0.2rem 0 0' }}>
+                  Selecciona los mapas disponibles o agrega mapas personalizados para esta ronda.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setMapPoolModal((prev) => ({ ...prev, isOpen: false }))}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                <Search
+                  size={16}
+                  style={{
+                    position: 'absolute',
+                    left: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--muted)',
+                  }}
+                />
+                <input
+                  type="text"
+                  className="input-base text-sm"
+                  placeholder="Buscar mapa..."
+                  value={searchMap}
+                  onChange={(e) => setSearchMap(e.target.value)}
+                  style={{ width: '100%', paddingLeft: '2rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                {(['all', 'official', 'custom'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    className={`btn text-xs ${mapFilter === filter ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.4rem 0.75rem', textTransform: 'capitalize' }}
+                    onClick={() => setMapFilter(filter)}
+                  >
+                    {filter === 'all' ? t('common.all') : filter === 'official' ? 'Oficiales' : 'Custom'}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Available Map Chips Grid */}
+            {/* Selected Count Indicator */}
+            <div
+              style={{
+                fontSize: '0.8rem',
+                color: 'var(--text-main)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span>
+                <strong>{mapPoolModal.selectedMaps.length}</strong> mapas seleccionados en el pool
+              </span>
+              {mapPoolModal.selectedMaps.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs text-danger"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={() => setMapPoolModal((prev) => ({ ...prev, selectedMaps: [] }))}
+                >
+                  Limpiar selección
+                </button>
+              )}
+            </div>
+
+            {/* Maps Grid Selector */}
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
                 gap: '0.5rem',
-                maxHeight: '260px',
+                maxHeight: '320px',
                 overflowY: 'auto',
-                padding: '0.75rem',
-                background: 'rgba(0, 0, 0, 0.3)',
+                padding: '0.5rem',
+                background: 'rgba(0,0,0,0.2)',
                 borderRadius: '8px',
                 border: '1px solid var(--border-light)',
-                alignContent: 'start',
               }}
             >
-              {filteredModalMaps.map((mapItem: any) => {
-                const mapName = mapItem.name;
+              {filteredModalMaps.map((map: any) => {
+                const mapName = map.name.toUpperCase();
                 const isSelected = mapPoolModal.selectedMaps.includes(mapName);
-                const isOfficial = mapItem.type === 'official';
+                const isOfficial = map.type === 'official';
 
                 return (
                   <button
@@ -1078,7 +1043,7 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
                   }
                 }}
               >
-                Agregar
+                {t('tournament_create.add_custom_field')}
               </button>
             </div>
 
@@ -1088,14 +1053,14 @@ export default function BracketViewer({ matches, teams, canManage, onMatchUpdate
                 className="btn btn-secondary"
                 onClick={() => setMapPoolModal((prev) => ({ ...prev, isOpen: false }))}
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={handleSaveMapPool}
               >
-                Guardar Pool de Mapas
+                {t('brackets.save_round_format')}
               </button>
             </div>
           </div>

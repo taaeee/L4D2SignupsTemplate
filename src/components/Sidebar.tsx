@@ -5,20 +5,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Trophy, Swords, Map, Menu, X, LogOut } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
+import { useTranslation } from "@/lib/i18n";
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { t } = useTranslation();
 
   const toggleSidebar = () => {
     setIsExpanded(!isExpanded);
   };
 
   const navItems = [
-    { name: "Torneos", href: "/torneos", icon: Trophy },
-    { name: "Matches", href: "/matches", icon: Swords },
-    { name: "Map Veto", href: "/map-veto", icon: Map },
+    { name: t("nav.tournaments"), href: "/torneos", icon: Trophy },
+    { name: t("nav.matches"), href: "/matches", icon: Swords },
+    { name: t("nav.map_veto"), href: "/map-veto", icon: Map },
   ];
 
   return (
@@ -146,10 +148,10 @@ export default function Sidebar() {
               justifyContent: "center",
               gap: "0.5rem",
             }}
-            title="Cerrar Sesión"
+            title={t("nav.logout")}
           >
             <LogOut size={18} />
-            {isExpanded && <span>Cerrar Sesión</span>}
+            {isExpanded && <span>{t("nav.logout")}</span>}
           </button>
         </div>
       )}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trophy, Swords } from 'lucide-react';
+import { X, Trophy, Swords, Lightbulb } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/lib/database.types';
+import { useTranslation } from '@/lib/i18n';
 
 type Match = Database['public']['Tables']['matches']['Row'];
 
@@ -20,6 +21,7 @@ interface ScoreModalProps {
 }
 
 export default function ScoreModal({ match, team1, team2, onClose, onSave, isSaving }: ScoreModalProps) {
+  const { t } = useTranslation();
   // Use string state to allow completely deleting/clearing values without auto-resetting to 0
   const [score1, setScore1] = useState<string>(
     match.score1 !== null && match.score1 !== undefined ? String(match.score1) : "0"
@@ -45,7 +47,7 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
 
   const handleSave = () => {
     if (!winnerId) {
-      toast.error("Por favor selecciona un ganador. Si hay empate, debes decidir quién avanza.");
+      toast.error(t("modals.select_winner_error"));
       return;
     }
     const num1 = score1 === "" ? 0 : parseInt(score1, 10);
@@ -77,7 +79,7 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
       onClick={onClose}
     >
       <div
-        className="glass-panel"
+        className="glass-panel modal-card"
         style={{
           width: '100%',
           maxWidth: '480px',
@@ -96,14 +98,15 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
               <Swords size={20} color="var(--primary)" />
               <h2 style={{ margin: 0, fontSize: '1.35rem', color: 'var(--text-main)', fontWeight: 700 }}>
-                Reportar Resultado
+                {t("modals.report_result_title")}
               </h2>
             </div>
             <p className="text-muted text-xs" style={{ margin: 0 }}>
-              Ingresa los marcadores y confirma el equipo ganador.
+              {t("modals.report_result_desc")}
             </p>
           </div>
           <button
+            type="button"
             className="btn-icon"
             onClick={onClose}
             style={{
@@ -163,13 +166,13 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                   }}
-                  title={team1 ? team1.name : 'Por Definir'}
+                  title={team1 ? team1.name : t("modals.to_be_decided")}
                 >
-                  {team1 ? team1.name : 'Por Definir'}
+                  {team1 ? team1.name : t("modals.to_be_decided")}
                 </span>
                 {winnerId === team1?.id && (
                   <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Ganador
+                    {t("matches.winner")}
                   </span>
                 )}
               </div>
@@ -184,27 +187,14 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
                 onChange={handleScoreChange(setScore1)}
                 onClick={(e) => e.stopPropagation()}
                 placeholder="0"
+                className="input-base"
                 style={{
                   width: '68px',
                   height: '42px',
                   padding: '0.4rem',
-                  background: 'rgba(0, 0, 0, 0.4)',
-                  border: '1px solid var(--border-light)',
-                  color: 'var(--text-main)',
                   textAlign: 'center',
-                  borderRadius: '8px',
                   fontSize: '1.2rem',
                   fontWeight: 700,
-                  outline: 'none',
-                  transition: 'border-color 0.2s, box-shadow 0.2s',
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = 'var(--border-focus)';
-                  e.target.style.boxShadow = '0 0 0 3px var(--primary-glow)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = 'var(--border-light)';
-                  e.target.style.boxShadow = 'none';
                 }}
               />
             )}
@@ -260,13 +250,13 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                   }}
-                  title={team2 ? team2.name : 'Por Definir'}
+                  title={team2 ? team2.name : t("modals.to_be_decided")}
                 >
-                  {team2 ? team2.name : 'Por Definir'}
+                  {team2 ? team2.name : t("modals.to_be_decided")}
                 </span>
                 {winnerId === team2?.id && (
                   <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Ganador
+                    {t("matches.winner")}
                   </span>
                 )}
               </div>
@@ -281,34 +271,21 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
                 onChange={handleScoreChange(setScore2)}
                 onClick={(e) => e.stopPropagation()}
                 placeholder="0"
+                className="input-base"
                 style={{
                   width: '68px',
                   height: '42px',
                   padding: '0.4rem',
-                  background: 'rgba(0, 0, 0, 0.4)',
-                  border: '1px solid var(--border-light)',
-                  color: 'var(--text-main)',
                   textAlign: 'center',
-                  borderRadius: '8px',
                   fontSize: '1.2rem',
                   fontWeight: 700,
-                  outline: 'none',
-                  transition: 'border-color 0.2s, box-shadow 0.2s',
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = 'var(--border-focus)';
-                  e.target.style.boxShadow = '0 0 0 3px var(--primary-glow)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = 'var(--border-light)';
-                  e.target.style.boxShadow = 'none';
                 }}
               />
             )}
           </div>
 
-          <p className="text-muted text-xs" style={{ margin: '0.25rem 0 0.5rem 0', textAlign: 'center' }}>
-            💡 Haz clic sobre una tarjeta para seleccionar manualmente al ganador en caso de empate.
+          <p className="text-muted text-xs" style={{ margin: '0.25rem 0 0.5rem 0', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+            <Lightbulb size={13} color="var(--primary)" /> {t("modals.manual_winner_tip")}
           </p>
 
           {/* Action Buttons */}
@@ -320,7 +297,7 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
               disabled={isSaving}
               style={{ flex: 1 }}
             >
-              Cancelar
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -329,18 +306,10 @@ export default function ScoreModal({ match, team1, team2, onClose, onSave, isSav
               disabled={isSaving || !winnerId}
               style={{ flex: 1 }}
             >
-              {isSaving ? 'Guardando...' : 'Guardar Resultado'}
+              {isSaving ? t("common.saving") : t("modals.save_result_btn")}
             </button>
           </div>
         </div>
-
-        <style dangerouslySetInnerHTML={{
-          __html: `
-          @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.96) translateY(8px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-          }
-        `}} />
       </div>
     </div>
   );

@@ -5,11 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ShieldCheck, LogIn, AlertCircle } from "lucide-react";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { useTranslation } from "@/lib/i18n";
 
 export default function ModInvitePage() {
   const { token } = useParams();
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { t } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export default function ModInvitePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Ocurrió un error al aceptar la invitación.");
+        setError(data.error || t("tournament_invite.error_accepting"));
       } else {
         setSuccess(true);
         setTournamentId(data.tournamentId);
@@ -38,13 +40,13 @@ export default function ModInvitePage() {
         }, 2000);
       }
     } catch (e) {
-      setError("Error de red.");
+      setError(t("common.error_network"));
     }
     setIsLoading(false);
   };
 
   if (status === "loading") {
-    return <LoadingSpinner text="Cargando..." fullHeight={true} />;
+    return <LoadingSpinner fullHeight={true} />;
   }
 
   return (
@@ -54,31 +56,31 @@ export default function ModInvitePage() {
         {success ? (
           <>
             <ShieldCheck size={64} style={{ color: "var(--success)", margin: "0 auto 1.5rem" }} />
-            <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>¡Invitación Aceptada!</h1>
-            <p className="text-muted">Ahora eres moderador del torneo. Redirigiendo al panel...</p>
+            <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>{t("tournament_invite.success_title")}</h1>
+            <p className="text-muted">{t("tournament_invite.success_desc")}</p>
           </>
         ) : (
           <>
             <ShieldCheck size={64} style={{ color: "var(--primary)", margin: "0 auto 1.5rem" }} />
-            <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>Invitación de Moderador</h1>
+            <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>{t("tournament_invite.title")}</h1>
             
             {status === "unauthenticated" ? (
               <>
                 <p className="text-muted" style={{ marginBottom: "2rem" }}>
-                  Debes iniciar sesión para aceptar esta invitación y convertirte en moderador.
+                  {t("tournament_invite.login_required_desc")}
                 </p>
                 <button 
                   className="btn btn-primary" 
                   style={{ width: "100%", justifyContent: "center" }}
                   onClick={() => router.push(`/login?callbackUrl=/tournament/invite/${token}`)}
                 >
-                  <LogIn size={20} /> Iniciar Sesión para Aceptar
+                  <LogIn size={20} /> {t("tournament_invite.login_to_accept")}
                 </button>
               </>
             ) : (
               <>
                 <p className="text-muted" style={{ marginBottom: "2rem" }}>
-                  Estás a punto de aceptar una invitación para moderar este torneo como <strong>{session?.user?.name || "usuario"}</strong>.
+                  {t("tournament_invite.about_to_accept", { name: session?.user?.name || "usuario" })}
                 </p>
                 
                 {error && (
@@ -94,7 +96,7 @@ export default function ModInvitePage() {
                   onClick={handleAccept}
                   disabled={isLoading}
                 >
-                  {isLoading ? "Aceptando..." : "Aceptar Invitación"}
+                  {isLoading ? t("tournament_invite.accepting") : t("tournament_invite.accept_button")}
                 </button>
               </>
             )}

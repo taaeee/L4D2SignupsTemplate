@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node scripts/test-tournament-brackets.mjs",
+    "test:brackets": "node scripts/test-tournament-brackets.mjs"
   },
   "dependencies": {
     "@auth/supabase-adapter": "^1.11.2",
@@ -25,6 +27,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^1.14.0",
     "lz-string": "^1.5.0",
+    "morphicons": "^1.7.0",
     "motion": "^12.40.0",
     "next": "16.2.4",
     "next-auth": "^4.24.14",

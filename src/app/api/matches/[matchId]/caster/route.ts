@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/lib/authOptions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { ensurePublicUser } from "@/lib/ensure-user";
+import { getUserStreamingChannels } from "@/lib/caster-enrichment";
 
 export async function POST(
   request: Request,
@@ -21,7 +22,39 @@ export async function POST(
     const body = await request.json();
     const { streamUrl } = body;
 
-    // Check if current user is an approved caster or organizer
+    // 1. Fetch match and its tournament to check permissions and tournament options
+    const { data: matchData } = await supabaseAdmin
+      .from("matches")
+      .select(`
+        id,
+        tournament_id,
+        tournaments (
+          id,
+          creator_id,
+          moderators,
+          allow_multiple_casters,
+          template_json
+        )
+      `)
+      .eq("id", matchId)
+      .single();
+
+    const tournament = matchData?.tournaments as any;
+    const isCreator = session.user.id && tournament?.creator_id === session.user.id;
+    const isModerator =
+      session.user.id &&
+      Array.isArray(tournament?.moderators) &&
+      tournament.moderators.includes(session.user.id);
+    const isTournamentAdmin = isCreator || isModerator;
+
+    const templateJson = (tournament?.template_json || {}) as any;
+    const allowMultipleCasters =
+      tournament?.allow_multiple_casters ??
+      templateJson.allowMultipleCasters ??
+      templateJson.allow_multiple_casters ??
+      false;
+
+    // 2. Check if current user is an approved global caster
     let { data: caster } = await supabaseAdmin
       .from("casters")
       .select("*")
@@ -36,7 +69,7 @@ export async function POST(
       "";
 
     if (!caster) {
-      // Fallback check in caster_applications
+      // Fallback check in global caster_applications
       const { data: app } = await supabaseAdmin
         .from("caster_applications")
         .select("*")
@@ -44,41 +77,68 @@ export async function POST(
         .eq("status", "approved")
         .maybeSingle();
 
-      if (!app) {
+      if (app) {
+        // Auto create caster record from approved global app
+        await ensurePublicUser(app.user_id);
+        const { data: newCaster } = await supabaseAdmin
+          .from("casters")
+          .upsert(
+            {
+              user_id: app.user_id,
+              alias: app.alias,
+              bio: app.bio,
+              twitch_channel: app.twitch_channel,
+              kick_channel: app.kick_channel,
+              youtube_channel: app.youtube_channel,
+            },
+            { onConflict: "user_id" }
+          )
+          .select()
+          .single();
+
+        casterId = newCaster?.id || app.id;
+        defaultStream =
+          (newCaster?.kick_channel ? (newCaster.kick_channel.startsWith("http") ? newCaster.kick_channel : `https://kick.com/${newCaster.kick_channel}`) : "") ||
+          newCaster?.youtube_channel ||
+          (newCaster?.twitch_channel ? (newCaster.twitch_channel.startsWith("http") ? newCaster.twitch_channel : `https://twitch.tv/${newCaster.twitch_channel}`) : "") ||
+          (app.kick_channel ? (app.kick_channel.startsWith("http") ? app.kick_channel : `https://kick.com/${app.kick_channel}`) : "") ||
+          app.youtube_channel ||
+          (app.twitch_channel ? (app.twitch_channel.startsWith("http") ? app.twitch_channel : `https://twitch.tv/${app.twitch_channel}`) : "") ||
+          "";
+      } else if (isTournamentAdmin) {
+        // Tournament Admin can cast their tournament without requiring a global application!
+        await ensurePublicUser(session.user.id, session.user);
+        const userChannels = await getUserStreamingChannels(session.user.id);
+        const { data: newCaster } = await supabaseAdmin
+          .from("casters")
+          .upsert(
+            {
+              user_id: session.user.id,
+              alias: session.user.name || "Organizador",
+              twitch_channel: userChannels.twitch_channel || null,
+              kick_channel: userChannels.kick_channel || null,
+              youtube_channel: userChannels.youtube_channel || null,
+            },
+            { onConflict: "user_id" }
+          )
+          .select()
+          .single();
+
+        casterId = newCaster?.id;
+        defaultStream =
+          (newCaster?.kick_channel ? (newCaster.kick_channel.startsWith("http") ? newCaster.kick_channel : `https://kick.com/${newCaster.kick_channel}`) : "") ||
+          newCaster?.youtube_channel ||
+          (newCaster?.twitch_channel ? (newCaster.twitch_channel.startsWith("http") ? newCaster.twitch_channel : `https://twitch.tv/${newCaster.twitch_channel}`) : "") ||
+          (userChannels.kick_channel ? `https://kick.com/${userChannels.kick_channel}` : "") ||
+          userChannels.youtube_channel ||
+          (userChannels.twitch_channel ? `https://twitch.tv/${userChannels.twitch_channel}` : "") ||
+          "";
+      } else {
         return NextResponse.json(
-          { error: "Solo los Casters Oficiales aprobados pueden castear matches." },
+          { error: "Solo los Casters Oficiales aprobados u organizadores de este torneo pueden castear matches." },
           { status: 403 }
         );
       }
-
-      // Auto create caster record from app
-      await ensurePublicUser(app.user_id);
-
-      const { data: newCaster } = await supabaseAdmin
-        .from("casters")
-        .upsert(
-          {
-            user_id: app.user_id,
-            alias: app.alias,
-            bio: app.bio,
-            twitch_channel: app.twitch_channel,
-            kick_channel: app.kick_channel,
-            youtube_channel: app.youtube_channel,
-          },
-          { onConflict: "user_id" }
-        )
-        .select()
-        .single();
-
-      casterId = newCaster?.id || app.id;
-      defaultStream =
-        (newCaster?.kick_channel ? (newCaster.kick_channel.startsWith("http") ? newCaster.kick_channel : `https://kick.com/${newCaster.kick_channel}`) : "") ||
-        newCaster?.youtube_channel ||
-        (newCaster?.twitch_channel ? (newCaster.twitch_channel.startsWith("http") ? newCaster.twitch_channel : `https://twitch.tv/${newCaster.twitch_channel}`) : "") ||
-        (app.kick_channel ? (app.kick_channel.startsWith("http") ? app.kick_channel : `https://kick.com/${app.kick_channel}`) : "") ||
-        app.youtube_channel ||
-        (app.twitch_channel ? (app.twitch_channel.startsWith("http") ? app.twitch_channel : `https://twitch.tv/${app.twitch_channel}`) : "") ||
-        "";
     }
 
     if (!casterId) {
@@ -86,6 +146,25 @@ export async function POST(
         { error: "No se pudo identificar el perfil de caster." },
         { status: 400 }
       );
+    }
+
+    // 3. Check if multiple casters are allowed on this tournament
+    if (!allowMultipleCasters) {
+      const { data: existingMatchCasters } = await supabaseAdmin
+        .from("match_casters")
+        .select("caster_id")
+        .eq("match_id", matchId);
+
+      if (
+        existingMatchCasters &&
+        existingMatchCasters.length > 0 &&
+        !existingMatchCasters.some((c) => c.caster_id === casterId)
+      ) {
+        return NextResponse.json(
+          { error: "Este match ya cuenta con un caster asignado y el torneo no permite múltiples casters simultáneos." },
+          { status: 400 }
+        );
+      }
     }
 
     const cleanStream = streamUrl || defaultStream;

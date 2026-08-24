@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { isSystemAdmin } from "@/lib/admin";
+import { useTranslation } from "@/lib/i18n";
 
 // Twitch SVG Icon
 const TwitchIcon = ({ size = 18, className = "", color, style }: { size?: number; className?: string; color?: string; style?: React.CSSProperties }) => (
@@ -138,6 +139,7 @@ const extractPlatformUsername = (channelOrUrl?: string | null) => {
 };
 
 export default function SettingsPage() {
+  const { t, language, setLanguage } = useTranslation();
   const { data: session, status, update } = useSession();
   const router = useRouter();
 
@@ -812,7 +814,7 @@ export default function SettingsPage() {
         {/* NAVIGATION SECTIONS */}
         <nav className="discord-nav-container">
           {/* Section: USER SETTINGS */}
-          <div className="discord-nav-section-title">AJUSTES DE USUARIO</div>
+          <div className="discord-nav-section-title">{t("settings.user_settings_category", { defaultValue: "AJUSTES DE USUARIO" })}</div>
 
           <button
             className={`discord-nav-item ${activeTab === "account" ? "active" : ""}`}
@@ -820,7 +822,7 @@ export default function SettingsPage() {
           >
             {activeTab === "account" && <div className="discord-active-indicator" />}
             <User size={18} />
-            <span>Mi Cuenta</span>
+            <span>{t("settings.tab_account")}</span>
           </button>
 
           <button
@@ -829,7 +831,7 @@ export default function SettingsPage() {
           >
             {activeTab === "connections" && <div className="discord-active-indicator" />}
             <LinkIcon size={18} />
-            <span>Conexiones</span>
+            <span>{t("settings.tab_connections")}</span>
           </button>
 
           <button
@@ -838,7 +840,7 @@ export default function SettingsPage() {
           >
             {activeTab === "caster" && <div className="discord-active-indicator" />}
             <Tv size={18} />
-            <span>Caster Oficial</span>
+            <span>{t("settings.tab_caster")}</span>
             {isCaster && <div className="discord-pill-dot green" />}
             {casterApp?.status === "pending" && <div className="discord-pill-dot yellow" />}
           </button>
@@ -847,7 +849,7 @@ export default function SettingsPage() {
           {isAdmin && (
             <>
               <div className="discord-nav-divider" />
-              <div className="discord-nav-section-title">ADMINISTRACIÓN</div>
+              <div className="discord-nav-section-title">{t("settings.admin_category", { defaultValue: "ADMINISTRACIÓN" })}</div>
 
               <button
                 className={`discord-nav-item ${activeTab === "admin" ? "active" : ""}`}
@@ -855,7 +857,7 @@ export default function SettingsPage() {
               >
                 {activeTab === "admin" && <div className="discord-active-indicator" />}
                 <ShieldCheck size={18} />
-                <span>Solicitudes Casters</span>
+                <span>{t("settings.tab_admin")}</span>
                 {pendingAdminCount > 0 && (
                   <span className="discord-badge alert">{pendingAdminCount}</span>
                 )}
@@ -865,14 +867,14 @@ export default function SettingsPage() {
 
           {/* Section: DANGER ZONE & ACTIONS */}
           <div className="discord-nav-divider" />
-          <div className="discord-nav-section-title">ACCIONES DE CUENTA</div>
+          <div className="discord-nav-section-title">{t("settings.account_actions_category", { defaultValue: "ACCIONES DE CUENTA" })}</div>
 
           <button
             className="discord-nav-item danger"
             onClick={() => setShowDeleteAccountModal(true)}
           >
             <Trash2 size={18} />
-            <span>Eliminar Cuenta</span>
+            <span>{t("settings.delete_account_btn")}</span>
           </button>
 
           <button
@@ -880,7 +882,7 @@ export default function SettingsPage() {
             onClick={() => signOut({ callbackUrl: "/" })}
           >
             <LogOut size={18} />
-            <span>Cerrar Sesión</span>
+            <span>{t("nav.sign_out")}</span>
           </button>
         </nav>
 
@@ -909,7 +911,7 @@ export default function SettingsPage() {
           {/* TAB 1: MI CUENTA / ACCOUNT INFO */}
           {activeTab === "account" && (
             <div className="discord-tab-pane">
-              <h2 className="discord-main-title">Mi Cuenta</h2>
+              <h2 className="discord-main-title">{t("settings.tab_account")}</h2>
 
               {/* Discord Profile Banner Box */}
               <div className="discord-profile-card">
@@ -932,7 +934,7 @@ export default function SettingsPage() {
                         setTempName(name);
                       }}
                     >
-                      Editar Perfil de Usuario
+                      {t("settings.edit_profile_btn", { defaultValue: "Editar Perfil" })}
                     </button>
                   </div>
 
@@ -945,7 +947,7 @@ export default function SettingsPage() {
                     {/* Username Row */}
                     <div className="discord-info-row">
                       <div>
-                        <div className="discord-info-label">NOMBRE DE USUARIO</div>
+                        <div className="discord-info-label">{t("settings.username_label").toUpperCase()}</div>
                         {isEditingUsername ? (
                           <div className="discord-inline-edit-wrap">
                             <input
@@ -961,14 +963,14 @@ export default function SettingsPage() {
                                 onClick={() => setIsEditingUsername(false)}
                                 disabled={savingProfile}
                               >
-                                Cancelar
+                                {t("common.cancel")}
                               </button>
                               <button
                                 className="discord-btn-small-save"
                                 onClick={() => handleSaveUsername()}
                                 disabled={savingProfile}
                               >
-                                {savingProfile ? "Guardando..." : "Listo"}
+                                {savingProfile ? t("common.saving") : t("common.save")}
                               </button>
                             </div>
                           </div>
@@ -984,7 +986,7 @@ export default function SettingsPage() {
                             setTempName(name);
                           }}
                         >
-                          Editar
+                          {t("common.edit")}
                         </button>
                       )}
                     </div>
@@ -992,7 +994,7 @@ export default function SettingsPage() {
                     {/* Email Row */}
                     <div className="discord-info-row">
                       <div>
-                        <div className="discord-info-label">CORREO ELECTRÓNICO</div>
+                        <div className="discord-info-label">{t("settings.email_label").toUpperCase()}</div>
                         {isEditingEmail ? (
                           <div className="discord-inline-edit-wrap">
                             <input
@@ -1008,14 +1010,14 @@ export default function SettingsPage() {
                                 onClick={() => setIsEditingEmail(false)}
                                 disabled={savingProfile}
                               >
-                                Cancelar
+                                {t("common.cancel")}
                               </button>
                               <button
                                 className="discord-btn-small-save"
                                 onClick={() => handleSaveEmail()}
                                 disabled={savingProfile}
                               >
-                                {savingProfile ? "Guardando..." : "Listo"}
+                                {savingProfile ? t("common.saving") : t("common.save")}
                               </button>
                             </div>
                           </div>
@@ -1039,7 +1041,7 @@ export default function SettingsPage() {
                             setTempEmail(email);
                           }}
                         >
-                          Editar
+                          {t("common.edit")}
                         </button>
                       )}
                     </div>
@@ -1047,23 +1049,79 @@ export default function SettingsPage() {
                     {/* User ID Row */}
                     <div className="discord-info-row">
                       <div>
-                        <div className="discord-info-label">ID DE USUARIO</div>
+                        <div className="discord-info-label">{t("settings.user_id_label").toUpperCase()}</div>
                         <div className="discord-info-value discord-code-text">
                           {session.user?.id || "N/A"}
                         </div>
                       </div>
                       <button className="discord-btn-edit" onClick={handleCopyId}>
                         {copiedId ? <Check size={14} /> : <Copy size={14} />}
-                        <span style={{ marginLeft: "4px" }}>{copiedId ? "Copiado" : "Copiar ID"}</span>
+                        <span style={{ marginLeft: "4px" }}>{copiedId ? t("common.copied") : t("common.copy")}</span>
                       </button>
                     </div>
                   </div>
                 </div>
               </div>
 
+              {/* Language Preference Setting Box */}
+              <div className="discord-section-divider" />
+              <h3 className="discord-section-title">{t("settings.language_preference_title")}</h3>
+
+              <div className="discord-card-panel">
+                <p className="discord-panel-desc">
+                  {t("settings.language_preference_desc")}
+                </p>
+
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "1rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage("es")}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      padding: "0.85rem 1.25rem",
+                      borderRadius: "8px",
+                      background: language === "es" ? "rgba(111, 175, 58, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                      border: language === "es" ? "2px solid var(--primary)" : "1px solid var(--border-light)",
+                      color: language === "es" ? "var(--primary)" : "var(--text-main)",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <span>🇪🇸</span>
+                    <span>{t("settings.spanish_option")}</span>
+                    {language === "es" && <Check size={16} color="var(--primary)" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setLanguage("en")}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      padding: "0.85rem 1.25rem",
+                      borderRadius: "8px",
+                      background: language === "en" ? "rgba(111, 175, 58, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                      border: language === "en" ? "2px solid var(--primary)" : "1px solid var(--border-light)",
+                      color: language === "en" ? "var(--primary)" : "var(--text-main)",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <span>🇺🇸</span>
+                    <span>{t("settings.english_option")}</span>
+                    {language === "en" && <Check size={16} color="var(--primary)" />}
+                  </button>
+                </div>
+              </div>
+
               {/* Password & Security Quick Card */}
               <div className="discord-section-divider" />
-              <h3 className="discord-section-title">Contraseña y Autenticación</h3>
+              <h3 className="discord-section-title">{t("settings.change_password_title")}</h3>
 
               <div className="discord-card-panel">
                 <p className="discord-panel-desc">
@@ -1073,7 +1131,7 @@ export default function SettingsPage() {
                 {showPasswordForm ? (
                   <form onSubmit={handleChangePassword} className="discord-password-form">
                     <div className="discord-form-group">
-                      <label className="discord-form-label">CONTRASEÑA ACTUAL</label>
+                      <label className="discord-form-label">{t("settings.current_password").toUpperCase()}</label>
                       <input
                         type="password"
                         className="discord-input"
@@ -1084,7 +1142,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="discord-form-group">
-                      <label className="discord-form-label">NUEVA CONTRASEÑA</label>
+                      <label className="discord-form-label">{t("settings.new_password").toUpperCase()}</label>
                       <input
                         type="password"
                         className="discord-input"
@@ -1097,7 +1155,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="discord-form-group">
-                      <label className="discord-form-label">CONFIRMAR NUEVA CONTRASEÑA</label>
+                      <label className="discord-form-label">{t("settings.confirm_new_password").toUpperCase()}</label>
                       <input
                         type="password"
                         className="discord-input"
@@ -1115,14 +1173,14 @@ export default function SettingsPage() {
                         className="discord-btn-cancel"
                         onClick={() => setShowPasswordForm(false)}
                       >
-                        Cancelar
+                        {t("common.cancel")}
                       </button>
                       <button
                         type="submit"
                         disabled={savingPassword}
                         className="discord-btn-primary"
                       >
-                        {savingPassword ? "Guardando..." : "Actualizar Contraseña"}
+                        {savingPassword ? t("settings.updating_password_btn") : t("settings.update_password_btn")}
                       </button>
                     </div>
                   </form>
@@ -1131,20 +1189,20 @@ export default function SettingsPage() {
                     className="discord-btn-primary"
                     onClick={() => setShowPasswordForm(true)}
                   >
-                    Cambiar Contraseña
+                    {t("settings.update_password_btn")}
                   </button>
                 )}
               </div>
 
               {/* Danger Zone */}
               <div className="discord-section-divider" />
-              <h3 className="discord-section-title danger-text">Zona de Peligro</h3>
+              <h3 className="discord-section-title danger-text">{t("settings.delete_account_title")}</h3>
 
               <div className="discord-danger-panel">
                 <div>
-                  <h4 className="discord-danger-title">Eliminación de la Cuenta</h4>
+                  <h4 className="discord-danger-title">{t("settings.delete_account_title")}</h4>
                   <p className="discord-danger-desc">
-                    Al eliminar tu cuenta se borrarán permanentemente tus registros, historial y conexiones vinculadas. Esta acción no se puede deshacer.
+                    {t("settings.delete_account_desc")}
                   </p>
                 </div>
                 <button
@@ -1152,18 +1210,18 @@ export default function SettingsPage() {
                   onClick={() => setShowDeleteAccountModal(true)}
                   disabled={isDeletingAccount}
                 >
-                  Eliminar Cuenta
+                  {t("settings.delete_account_btn")}
                 </button>
               </div>
             </div>
           )}
 
-          {/* TAB 3: CONEXIONES */}
+          {/* TAB 2: CONEXIONES */}
           {activeTab === "connections" && (
             <div className="discord-tab-pane">
-              <h2 className="discord-main-title">Conexiones</h2>
+              <h2 className="discord-main-title">{t("settings.tab_connections")}</h2>
               <p className="discord-main-desc">
-                Conecta tus plataformas de gaming y streaming para verificar tu identidad y participar en torneos y transmisiones.
+                {t("settings.connected_accounts_desc")}
               </p>
 
               <div className="discord-connections-grid">
@@ -1176,7 +1234,7 @@ export default function SettingsPage() {
                     <div>
                       <div className="discord-conn-name">Steam</div>
                       <div className={`discord-conn-status ${hasSteamLinked ? "connected" : ""}`}>
-                        {hasSteamLinked ? `Conectado: ${steamInfo?.name || "Steam User"}` : "No conectado"}
+                        {hasSteamLinked ? `${t("settings.linked_badge")}: ${steamInfo?.name || "Steam User"}` : "No conectado"}
                       </div>
                     </div>
                   </div>
@@ -1189,11 +1247,11 @@ export default function SettingsPage() {
                         setShowConfirmModal(true);
                       }}
                     >
-                      <Unlink size={16} /> Desvincular
+                      <Unlink size={16} /> {t("settings.unlink_btn")}
                     </button>
                   ) : (
                     <button className="discord-btn-connect steam-btn" onClick={() => signIn("steam")}>
-                      <LinkIcon size={16} /> Conectar
+                      <LinkIcon size={16} /> {t("settings.connect_steam")}
                     </button>
                   )}
                 </div>
@@ -1207,7 +1265,7 @@ export default function SettingsPage() {
                     <div>
                       <div className="discord-conn-name">Discord</div>
                       <div className={`discord-conn-status ${hasDiscordLinked ? "connected" : ""}`}>
-                        {hasDiscordLinked ? "Cuenta vinculada" : "No conectado"}
+                        {hasDiscordLinked ? t("settings.linked_badge") : "No conectado"}
                       </div>
                     </div>
                   </div>
@@ -1220,11 +1278,11 @@ export default function SettingsPage() {
                         setShowConfirmModal(true);
                       }}
                     >
-                      <Unlink size={16} /> Desvincular
+                      <Unlink size={16} /> {t("settings.unlink_btn")}
                     </button>
                   ) : (
                     <button className="discord-btn-connect discord-btn" onClick={() => signIn("discord")}>
-                      <LinkIcon size={16} /> Conectar
+                      <LinkIcon size={16} /> {t("settings.connect_discord")}
                     </button>
                   )}
                 </div>
@@ -1238,7 +1296,7 @@ export default function SettingsPage() {
                     <div>
                       <div className="discord-conn-name">Twitch</div>
                       <div className={`discord-conn-status ${hasTwitchLinked ? "connected" : ""}`}>
-                        {hasTwitchLinked ? `Conectado: twitch.tv/${twitchInfo?.username || "canal"}` : "No conectado"}
+                        {hasTwitchLinked ? `${t("settings.linked_badge")}: twitch.tv/${twitchInfo?.username || "canal"}` : "No conectado"}
                       </div>
                     </div>
                   </div>

@@ -151,6 +151,46 @@ export async function POST(req: Request, { params }: { params: any }) {
       } else {
         matchesToUpdate.set(targetMatch.id, { [targetField]: targetMatch[targetField] });
       }
+
+      if (format === "double_elimination") {
+        const ubR1Matches = allMatches.filter((m) => m.round === 1 && m.is_upper);
+        const lbR1Matches = allMatches.filter((m) => m.round === 1 && !m.is_upper);
+        const lbR2Matches = allMatches.filter((m) => m.round === 2 && !m.is_upper);
+
+        const lbR1TeamCount: Record<string, number> = {};
+        for (const ubMatch of ubR1Matches) {
+          if (ubMatch.loser_match_id) {
+            if (!lbR1TeamCount[ubMatch.loser_match_id]) lbR1TeamCount[ubMatch.loser_match_id] = 0;
+            if (!ubMatch.is_bye) {
+              lbR1TeamCount[ubMatch.loser_match_id] += 1;
+            }
+          }
+        }
+
+        for (const lbMatch of lbR1Matches) {
+          const incomingTeams = lbR1TeamCount[lbMatch.id] || 0;
+          const isBye = incomingTeams <= 1;
+          lbMatch.is_bye = isBye;
+          lbMatch.status = isBye ? "completed" : "pending";
+          matchesToUpdate.set(lbMatch.id, {
+            is_bye: lbMatch.is_bye,
+            status: lbMatch.status,
+          });
+
+          if (lbMatch.next_match_id) {
+            const lbR2Match = lbR2Matches.find((m) => m.id === lbMatch.next_match_id);
+            if (lbR2Match) {
+              const isR2Bye = incomingTeams === 0;
+              lbR2Match.is_bye = isR2Bye;
+              lbR2Match.status = isR2Bye ? "completed" : "pending";
+              matchesToUpdate.set(lbR2Match.id, {
+                is_bye: lbR2Match.is_bye,
+                status: lbR2Match.status,
+              });
+            }
+          }
+        }
+      }
     }
 
     // Persist all modified matches

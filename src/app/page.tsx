@@ -2,9 +2,11 @@
 
 import React, { useEffect } from "react";
 import LoginButton from "@/components/LoginButton";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { useTranslation } from "@/lib/i18n";
 import {
   Link as LinkIcon,
   Trophy,
@@ -18,6 +20,7 @@ import {
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -27,7 +30,7 @@ export default function Home() {
 
   if (status === "loading" || session) {
     return (
-      <LoadingSpinner text="Cargando..." fullHeight={true} />
+      <LoadingSpinner fullHeight={true} />
     );
   }
 
@@ -47,9 +50,12 @@ export default function Home() {
         }}
       >
         <h1 style={{ fontSize: "1.5rem", margin: 0 }}>
-          <span className="text-gradient">L4D2</span> Tournament
+          <span className="text-gradient">{t("landing.title_prefix")}</span> {t("landing.title_suffix")}
         </h1>
-        <LoginButton />
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <LanguageSwitcher />
+          <LoginButton />
+        </div>
       </header>
 
       <main style={{ flex: 1 }}>
@@ -67,8 +73,8 @@ export default function Home() {
               lineHeight: 1.2,
             }}
           >
-            Organiza tus Torneos <br /> de forma{" "}
-            <span className="text-gradient">Profesional</span>
+            {t("landing.hero_title_1")} <br /> {t("landing.hero_title_2")}{" "}
+            <span className="text-gradient">{t("landing.hero_title_highlight")}</span>
           </h2>
           <p
             className="text-muted"
@@ -78,8 +84,7 @@ export default function Home() {
               margin: "0 auto 2.5rem",
             }}
           >
-            Plataforma integral de gestión de torneos y registros de equipos
-            diseñada específicamente para la comunidad de Left 4 Dead 2.
+            {t("landing.hero_desc")}
           </p>
           <button
             className="btn btn-primary"
@@ -90,7 +95,7 @@ export default function Home() {
             }}
             onClick={() => router.push("/login")}
           >
-            Empezar ahora
+            {t("landing.start_now")}
           </button>
         </section>
 
@@ -102,14 +107,14 @@ export default function Home() {
               marginBottom: "4rem",
             }}
           >
-            ¿Cómo funciona?
+            {t("landing.how_it_works")}
           </h3>
 
           {/* ORGANIZADOR */}
           <div style={{ marginBottom: "5rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem", justifyContent: "center" }}>
               <Trophy size={32} color="var(--primary)" />
-              <h4 style={{ fontSize: "1.8rem", margin: 0 }}>Para Organizadores</h4>
+              <h4 style={{ fontSize: "1.8rem", margin: 0 }}>{t("landing.for_organizers")}</h4>
             </div>
             <div
               style={{
@@ -119,15 +124,12 @@ export default function Home() {
               }}
             >
               <div
-                className="card"
+                className="card hover-lift"
                 style={{
                   textAlign: "center",
                   padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
                   borderTop: "3px solid var(--primary)",
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
               >
                 <div
                   style={{
@@ -144,23 +146,20 @@ export default function Home() {
                   <Settings size={32} color="var(--primary)" />
                 </div>
                 <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  1. Crea tu torneo
+                  {t("landing.org_step1_title")}
                 </h4>
                 <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Configura las reglas, regiones, límite de equipos y personaliza los campos de registro en segundos.
+                  {t("landing.org_step1_desc")}
                 </p>
               </div>
 
               <div
-                className="card"
+                className="card hover-lift"
                 style={{
                   textAlign: "center",
                   padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
                   borderTop: "3px solid var(--primary)",
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
               >
                 <div
                   style={{
@@ -177,23 +176,20 @@ export default function Home() {
                   <LinkIcon size={32} color="var(--primary)" />
                 </div>
                 <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  2. Comparte el enlace
+                  {t("landing.org_step2_title")}
                 </h4>
                 <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Envía el enlace de registro a los capitanes. El sistema recopilará automáticamente los Steam IDs reales.
+                  {t("landing.org_step2_desc")}
                 </p>
               </div>
 
               <div
-                className="card"
+                className="card hover-lift"
                 style={{
                   textAlign: "center",
                   padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
                   borderTop: "3px solid var(--primary)",
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
               >
                 <div
                   style={{
@@ -210,10 +206,10 @@ export default function Home() {
                   <AlignEndHorizontal size={32} color="var(--primary)" />
                 </div>
                 <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  3. Gestiona y Genera Llaves
+                  {t("landing.org_step3_title")}
                 </h4>
                 <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Revisa las inscripciones, gestiona baneos y genera automáticamente las llaves del torneo (bracket).
+                  {t("landing.org_step3_desc")}
                 </p>
               </div>
             </div>
@@ -223,7 +219,7 @@ export default function Home() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem", justifyContent: "center" }}>
               <Gamepad2 size={32} color="var(--success)" />
-              <h4 style={{ fontSize: "1.8rem", margin: 0 }}>Para Participantes</h4>
+              <h4 style={{ fontSize: "1.8rem", margin: 0 }}>{t("landing.for_participants")}</h4>
             </div>
             <div
               style={{
@@ -233,15 +229,12 @@ export default function Home() {
               }}
             >
               <div
-                className="card"
+                className="card hover-lift"
                 style={{
                   textAlign: "center",
                   padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
                   borderTop: "3px solid var(--success)",
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
               >
                 <div
                   style={{
@@ -258,23 +251,20 @@ export default function Home() {
                   <ShieldCheck size={32} color="var(--success)" />
                 </div>
                 <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  1. Vincula tu cuenta
+                  {t("landing.part_step1_title")}
                 </h4>
                 <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Inicia sesión de forma segura a través de Steam. Esto garantiza la integridad de la competencia.
+                  {t("landing.part_step1_desc")}
                 </p>
               </div>
 
               <div
-                className="card"
+                className="card hover-lift"
                 style={{
                   textAlign: "center",
                   padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
                   borderTop: "3px solid var(--success)",
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
               >
                 <div
                   style={{
@@ -291,23 +281,20 @@ export default function Home() {
                   <Users size={32} color="var(--success)" />
                 </div>
                 <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  2. Inscribe a tu equipo
+                  {t("landing.part_step2_title")}
                 </h4>
                 <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Añade a tus amigos a la lista directamente desde tu perfil de Steam, elige un tag, país y un logo.
+                  {t("landing.part_step2_desc")}
                 </p>
               </div>
 
               <div
-                className="card"
+                className="card hover-lift"
                 style={{
                   textAlign: "center",
                   padding: "2.5rem 2rem",
-                  transition: "transform 0.2s",
                   borderTop: "3px solid var(--success)",
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
-                onMouseOut={(e) => (e.currentTarget.style.transform = "none")}
               >
                 <div
                   style={{
@@ -324,10 +311,10 @@ export default function Home() {
                   <Trophy size={32} color="var(--success)" />
                 </div>
                 <h4 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  3. Compite y avanza
+                  {t("landing.part_step3_title")}
                 </h4>
                 <p className="text-muted" style={{ fontSize: "0.95rem" }}>
-                  Sigue tu progreso en vivo desde el panel del torneo y visualiza de forma dinámica a tus contrincantes.
+                  {t("landing.part_step3_desc")}
                 </p>
               </div>
             </div>
@@ -342,7 +329,7 @@ export default function Home() {
           paddingBottom: "2rem",
         }}
       >
-        <p className="text-muted text-sm">Powered by Colossus Corporation®</p>
+        <p className="text-muted text-sm">{t("common.powered_by")}</p>
       </footer>
     </div>
   );

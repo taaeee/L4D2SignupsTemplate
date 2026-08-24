@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { fetchBansInBatches } from "@/lib/ban-checker";
+import { useTranslation } from "@/lib/i18n";
 
 interface TeamMember {
   id: string;
@@ -46,6 +47,7 @@ export default function TeamDetails() {
   const teamId = params.teamId as string;
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { t } = useTranslation();
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [team, setTeam] = useState<Team | null>(null);
@@ -104,7 +106,7 @@ export default function TeamDetails() {
 
     if (tData && teamData) {
       if (teamData.status !== "accepted") {
-        toast.error("No puedes acceder al panel de edición de este equipo porque aún no ha sido aceptado.");
+        toast.error(t("team_detail.not_accepted_error"));
         router.push(`/tournament/${tournamentId}`);
         return;
       }
@@ -157,7 +159,6 @@ export default function TeamDetails() {
   const isCaptain = session?.user?.id === team?.creator_id;
   
   const isLocked = tournament?.status === "locked";
-  // Mod/Creator always edit. Captain only if open.
   const canEdit = isCreator || isModerator || (isCaptain && !isLocked);
   const isAdmin = isCreator || isModerator;
 
@@ -175,8 +176,8 @@ export default function TeamDetails() {
 
     if (!freshCanEdit) {
       toast.error(freshIsLocked 
-        ? "El torneo acaba de ser cerrado por un administrador. Ya no puedes hacer cambios."
-        : "No tienes permisos para hacer esto.");
+        ? t("team_detail.closed_by_admin_error")
+        : t("team_detail.no_permissions"));
       
       if (freshIsLocked && tournament?.status !== "locked") {
         setTournament((prev: any) => prev ? {...prev, status: "locked"} : null);
@@ -195,14 +196,14 @@ export default function TeamDetails() {
     await supabase.from("team_members").delete().eq("id", playerId);
     setPlayers(players.filter(p => p.id !== playerId));
     setIsSaving(false);
-    toast.success("Jugador eliminado.");
+    toast.success(t("team_detail.player_removed"));
   };
 
   const handleRemovePlayer = (playerId: string) => {
     setConfirmModal({
       isOpen: true,
-      title: "Eliminar Jugador",
-      message: "¿Estás seguro de eliminar este jugador?",
+      title: t("team_detail.remove_player_title"),
+      message: t("team_detail.remove_player_msg"),
       isDanger: true,
       onConfirm: () => executeRemovePlayer(playerId)
     });
@@ -225,7 +226,7 @@ export default function TeamDetails() {
       setTeam(prev => ({ ...prev, name: player.name }));
     }
 
-    toast.success("Jugador actualizado.");
+    toast.success(t("team_detail.player_updated"));
     setIsSaving(false);
   };
 
@@ -233,15 +234,15 @@ export default function TeamDetails() {
     if (!(await checkPermissionToEdit())) return;
     setIsSaving(true);
     await supabase.from("teams").delete().eq("id", teamId);
-    toast.success("Equipo eliminado.");
+    toast.success(t("team_detail.team_deleted"));
     router.push(`/tournament/${tournamentId}`);
   };
 
   const handleDeleteTeam = () => {
     setConfirmModal({
       isOpen: true,
-      title: "Eliminar Equipo",
-      message: "¿Estás seguro de eliminar todo el equipo? Esto es irreversible.",
+      title: t("team_detail.delete_team_title"),
+      message: t("team_detail.delete_team_msg"),
       isDanger: true,
       onConfirm: executeDeleteTeam
     });
@@ -253,9 +254,9 @@ export default function TeamDetails() {
     const { error } = await supabase.from("teams").update({ status: newStatus }).eq("id", teamId);
     if (!error) {
       setTeam(prev => prev ? ({ ...prev, status: newStatus }) : null);
-      toast.success(`Estado cambiado a: ${label}`);
+      toast.success(`${t("common.status")}: ${label}`);
     } else {
-      toast.error("Error al actualizar el estado");
+      toast.error(t("common.error_network"));
     }
     setIsSaving(false);
   };
@@ -300,7 +301,7 @@ export default function TeamDetails() {
       if (error) throw new Error("Error actualizando la base de datos.");
 
       setTeam({ ...(team as Team), logo_url: finalUrl, raw_logo_url: finalLogoString, name: teamName });
-      toast.success("Información del equipo actualizada con éxito.");
+      toast.success(t("team_detail.info_updated_success"));
       setIsEditingInfo(false);
       setTempLogoFile(null);
     } catch (err: any) {
@@ -339,12 +340,11 @@ export default function TeamDetails() {
 
     if (!tournament) return;
     if (players.length >= ((tournament.template_json as any)?.maxPlayers || 8)) {
-      return toast.error("El equipo está lleno.");
+      return toast.error(t("tournament_register.team_full"));
     }
     
     setIsSaving(true);
     try {
-      // Usamos el profileUrl como el steamId a buscar
       const res = await fetch(`/api/steam/player-stats?steamUrl=${encodeURIComponent(friend.profileUrl)}`);
       const steamData = await res.json();
       if (!res.ok || steamData.error) throw new Error("La URL de Steam es inválida o no existe.");
@@ -367,7 +367,7 @@ export default function TeamDetails() {
       }
 
       setPlayers([...players, data]);
-      toast.success("Amigo añadido con éxito.");
+      toast.success(t("team_detail.friend_added_success"));
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -377,14 +377,14 @@ export default function TeamDetails() {
 
   const handleAddNewPlayer = async () => {
     if (!newPlayer.name || !newPlayer.steam_id_64) {
-      return toast.error("El nombre y el SteamID64 son obligatorios.");
+      return toast.error(t("team_detail.name_and_steam_required"));
     }
 
     if (!(await checkPermissionToEdit())) return;
 
     if (!tournament) return;
     if (players.length >= ((tournament.template_json as any)?.maxPlayers || 8)) {
-      return toast.error("El equipo está lleno.");
+      return toast.error(t("tournament_register.team_full"));
     }
 
     setIsSaving(true);
@@ -397,8 +397,8 @@ export default function TeamDetails() {
       const { data, error } = await supabase.from("team_members").insert([{
         team_id: teamId,
         name: newPlayer.name,
-        role: JSON.stringify({ title: "Member", answers: {} }), // Backend default, but UI uses index
-        steam_id_64: steamData.steam_id_64, // API returns the resolved ID
+        role: JSON.stringify({ title: "Member", answers: {} }),
+        steam_id_64: steamData.steam_id_64,
         l4d2_playtime_hours: steamData.l4d2_playtime_hours,
         is_profile_private: steamData.is_profile_private
       }]).select().single();
@@ -413,7 +413,7 @@ export default function TeamDetails() {
 
       setPlayers([...players, data]);
       setNewPlayer({ name: "", steam_id_64: "" });
-      toast.success("Jugador añadido con éxito.");
+      toast.success(t("team_detail.player_added_success"));
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -421,8 +421,8 @@ export default function TeamDetails() {
     }
   };
 
-  if (isLoading) return <LoadingSpinner text="Cargando equipo..." fullHeight={true} />;
-  if (!team || !tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>No encontrado.</div>;
+  if (isLoading) return <LoadingSpinner fullHeight={true} />;
+  if (!team || !tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>{t("tournament_detail.tournament_not_found")}</div>;
 
   return (
     <div className="container" style={{ paddingBottom: "4rem" }}>
@@ -435,7 +435,7 @@ export default function TeamDetails() {
           />
           {canEdit && !isEditingInfo && (
             <button className="btn btn-secondary text-sm" style={{ padding: "0.3rem" }} onClick={() => { setIsEditingInfo(true); setTempLogoFile(null); }}>
-              Editar Perfil
+              {t("team_detail.edit_profile_btn")}
             </button>
           )}
         </div>
@@ -443,11 +443,11 @@ export default function TeamDetails() {
         {isEditingInfo && canEdit && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minWidth: "250px", background: "rgba(255,255,255,0.05)", padding: "1rem", borderRadius: "16px" }}>
             <div>
-              <label className="text-sm text-muted">Sube un nuevo logo (Opcional)</label>
+              <label className="text-sm text-muted">{t("tournament_create.logo_label")}</label>
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                 <label className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", flex: 1, justifyContent: "center" }}>
                   <Upload size={18} />
-                  {tempLogoFile ? tempLogoFile.name : "Seleccionar Imagen"}
+                  {tempLogoFile ? tempLogoFile.name : t("tournament_create.upload_image")}
                   <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setTempLogoFile(e.target.files?.[0] || null)} />
                 </label>
               </div>
@@ -455,18 +455,18 @@ export default function TeamDetails() {
 
             {!((tournament?.template_json as any)?.is1v1) && (
               <div>
-                <label className="text-sm text-muted block mb-1">Nombre del Equipo</label>
-                <input className="input-base" value={teamName} onChange={e => setTeamName(e.target.value)} placeholder="Nombre del Equipo" />
+                <label className="text-sm text-muted block mb-1">{t("tournament_register.team_name_label")}</label>
+                <input className="input-base" value={teamName} onChange={e => setTeamName(e.target.value)} placeholder={t("tournament_register.team_name_label")} />
               </div>
             )}
 
             <div>
-              <label className="text-sm text-muted block mb-1">Tag del Equipo</label>
+              <label className="text-sm text-muted block mb-1">{t("tournament_register.team_tag_label")}</label>
               <input className="input-base" value={teamTag} onChange={e => setTeamTag(e.target.value)} placeholder="Ej: ^" />
             </div>
 
             <div style={{ position: "relative" }}>
-              <label className="text-sm text-muted block mb-1">Países del Equipo</label>
+              <label className="text-sm text-muted block mb-1">{t("tournament_register.team_countries_label")}</label>
               {teamCountries.length > 0 && (
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
                   {teamCountries.map(c => (
@@ -482,7 +482,7 @@ export default function TeamDetails() {
               )}
               <input 
                 className="input-base" 
-                placeholder="Buscar país..." 
+                placeholder={t("tournament_register.search_country_placeholder")} 
                 value={countrySearch} 
                 onChange={e => {
                   setCountrySearch(e.target.value);
@@ -505,7 +505,6 @@ export default function TeamDetails() {
                           setShowCountryDropdown(false);
                         }}
                         style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", cursor: "pointer" }}
-                        className="hover:bg-white/5 transition-colors"
                       >
                         <img src={c.flag} alt={c.name} style={{ width: 24, height: 16, objectFit: "cover", borderRadius: 2 }} />
                         <span>{c.name}</span>
@@ -516,7 +515,7 @@ export default function TeamDetails() {
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-              <button className="btn btn-primary" onClick={handleSaveInfo} disabled={isSaving} style={{ flex: 1 }}><Save size={18} /> Guardar Cambios</button>
+              <button className="btn btn-primary" onClick={handleSaveInfo} disabled={isSaving} style={{ flex: 1 }}><Save size={18} /> {t("common.save_changes")}</button>
               <button className="btn-icon text-muted" onClick={() => setIsEditingInfo(false)}><X size={18} /></button>
             </div>
           </div>
@@ -543,23 +542,23 @@ export default function TeamDetails() {
             )}
             {team.status === "eliminated" && (
               <span className="badge" style={{ background: "rgba(239, 68, 68, 0.15)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.3)", fontWeight: "bold", fontSize: "0.85rem", padding: "4px 10px", marginLeft: "0.5rem" }}>
-                ELIMINADO
+                {t("team_detail.status_eliminated_badge")}
               </span>
             )}
             {team.status === "disqualified" && (
               <span className="badge" style={{ background: "rgba(239, 68, 68, 0.15)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.3)", fontWeight: "bold", fontSize: "0.85rem", padding: "4px 10px", marginLeft: "0.5rem" }}>
-                DESCALIFICADO
+                {t("team_detail.status_disqualified_badge")}
               </span>
             )}
             {team.status === "withdrawn" && (
               <span className="badge" style={{ background: "rgba(234, 179, 8, 0.15)", color: "#eab308", border: "1px solid rgba(234, 179, 8, 0.3)", fontWeight: "bold", fontSize: "0.85rem", padding: "4px 10px", marginLeft: "0.5rem" }}>
-                RETIRADO (SALIDA PROPIA)
+                {t("team_detail.status_withdrawn_badge")}
               </span>
             )}
           </h1>
-          <p className="text-muted">Torneo: {tournament.name}</p>
+          <p className="text-muted">{t("team_detail.tournament_label")}: {tournament.name}</p>
           {!canEdit && isCaptain && isLocked && (
-             <p className="text-danger">El torneo ha iniciado. No puedes editar tu equipo.</p>
+             <p className="text-danger">{t("team_detail.tournament_started_no_edit")}</p>
           )}
         </div>
         )}
@@ -570,45 +569,45 @@ export default function TeamDetails() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
             <div>
               <h3 style={{ margin: 0, fontSize: "1.1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                Estado del Equipo en la Competencia
+                {t("team_detail.competition_status_title")}
               </h3>
               <p className="text-muted text-sm" style={{ margin: "0.25rem 0 0 0" }}>
-                Cambia el estado para indicar si el equipo compite o si salió del torneo.
+                {t("team_detail.competition_status_desc")}
               </p>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button 
                 type="button"
                 className={`btn ${team.status === "accepted" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => handleUpdateStatus("accepted", "En Competencia")}
+                onClick={() => handleUpdateStatus("accepted", t("team_detail.in_competition"))}
                 disabled={isSaving || team.status === "accepted"}
               >
-                En Competencia
+                {t("team_detail.in_competition")}
               </button>
               <button 
                 type="button"
                 className={`btn ${team.status === "eliminated" ? "btn-danger" : "btn-secondary text-danger"}`}
-                onClick={() => handleUpdateStatus("eliminated", "Eliminado")}
+                onClick={() => handleUpdateStatus("eliminated", t("team_detail.status_eliminated_badge"))}
                 disabled={isSaving || team.status === "eliminated"}
               >
-                Eliminado
+                {t("team_detail.status_eliminated_badge")}
               </button>
               <button 
                 type="button"
                 className={`btn ${team.status === "disqualified" ? "btn-danger" : "btn-secondary text-danger"}`}
-                onClick={() => handleUpdateStatus("disqualified", "Descalificado")}
+                onClick={() => handleUpdateStatus("disqualified", t("team_detail.status_disqualified_badge"))}
                 disabled={isSaving || team.status === "disqualified"}
               >
-                Descalificado
+                {t("team_detail.status_disqualified_badge")}
               </button>
               <button 
                 type="button"
                 className={`btn ${team.status === "withdrawn" ? "btn-warning" : "btn-secondary"}`}
-                onClick={() => handleUpdateStatus("withdrawn", "Retirado (Salida propia)")}
+                onClick={() => handleUpdateStatus("withdrawn", t("team_detail.status_withdrawn_badge"))}
                 disabled={isSaving || team.status === "withdrawn"}
                 style={{ color: team.status === "withdrawn" ? "#fff" : "#eab308" }}
               >
-                Retirado
+                {t("team_detail.status_withdrawn_badge")}
               </button>
             </div>
           </div>
@@ -617,7 +616,7 @@ export default function TeamDetails() {
 
       <div className="glass-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-          <h2 style={{ margin: 0, color: "var(--primary)" }}>Roster ({players.length}/{((tournament?.template_json as any)?.maxPlayers || 8)})</h2>
+          <h2 style={{ margin: 0, color: "var(--primary)" }}>{t("team_detail.roster_title")} ({players.length}/{((tournament?.template_json as any)?.maxPlayers || 8)})</h2>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -625,11 +624,11 @@ export default function TeamDetails() {
             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "1rem", background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
               <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1.5fr 1.5fr", gap: "1rem" }}>
                 <div>
-                  <label className="text-sm text-muted block mb-1">Nombre</label>
+                  <label className="text-sm text-muted block mb-1">{t("team_detail.player_name_label")}</label>
                   <input className="input-base" value={p.name} disabled={!canEdit} onChange={e => handleUpdatePlayer(index, "name", e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-sm text-muted block mb-1">Rol</label>
+                  <label className="text-sm text-muted block mb-1">{t("team_detail.role_label")}</label>
                   <div className="input-base" style={{ background: "rgba(0,0,0,0.1)", opacity: 0.8, color: "var(--muted)" }}>
                     {index === 0 ? "Captain" : index === 1 ? "Co-Captain" : "Member"}
                   </div>
@@ -644,7 +643,7 @@ export default function TeamDetails() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm text-muted block mb-1">Estado (Comunidad)</label>
+                  <label className="text-sm text-muted block mb-1">{t("team_detail.community_status_label")}</label>
                   {(() => {
                     const banInfo = getPlayerBan(p.steam_id_64);
                     return (
@@ -682,7 +681,7 @@ export default function TeamDetails() {
                   <button className="btn-icon text-success" onClick={() => savePlayerChanges(p)} title="Guardar Cambios del Jugador" disabled={isSaving}>
                     <Save size={18} />
                   </button>
-                  <button className="btn-icon btn-danger" onClick={() => handleRemovePlayer(p.id)} title="Expulsar" disabled={isSaving}>
+                  <button className="btn-icon btn-danger" onClick={() => handleRemovePlayer(p.id)} title={t("team_detail.kick_player_title")} disabled={isSaving}>
                     <Trash2 size={18} />
                   </button>
                 </div>
@@ -694,22 +693,22 @@ export default function TeamDetails() {
 
       {canEdit && tournament && players.length < ((tournament.template_json as any)?.maxPlayers || 8) && (
         <div className="glass-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
-          <h3 style={{ marginBottom: "1rem" }}>Añadir Nuevo Jugador</h3>
+          <h3 style={{ marginBottom: "1rem" }}>{t("team_detail.add_new_player_title")}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "1rem", alignItems: "end" }}>
             <div>
-              <label className="text-sm text-muted block mb-1">Nombre</label>
+              <label className="text-sm text-muted block mb-1">{t("team_detail.player_name_label")}</label>
               <input className="input-base" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} />
             </div>
             <div>
-              <label className="text-sm text-muted block mb-1">URL de Steam</label>
+              <label className="text-sm text-muted block mb-1">{t("tournament_register.steam_url")}</label>
               <input className="input-base" placeholder="https://steamcommunity..." value={newPlayer.steam_id_64} onChange={e => setNewPlayer({...newPlayer, steam_id_64: e.target.value})} />
             </div>
             <div style={{ display: "flex", gap: "1rem" }}>
               <button type="button" className="btn btn-secondary" onClick={loadFriends} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }} disabled={isSaving}>
-                <Users size={20} /> Añadir desde Steam
+                <Users size={20} /> {t("tournament_register.add_from_steam")}
               </button>
               <button className="btn btn-primary" onClick={handleAddNewPlayer} disabled={isSaving}>
-                <Plus size={20} /> Añadir
+                <Plus size={20} /> {t("team_detail.add_btn")}
               </button>
             </div>
           </div>
@@ -719,10 +718,10 @@ export default function TeamDetails() {
       {canEdit && (
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2rem" }}>
           <button className="btn text-danger" onClick={handleDeleteTeam} style={{ border: "1px solid var(--color-error)" }}>
-            Eliminar Equipo
+            {t("team_detail.delete_team_btn")}
           </button>
           <button className="btn btn-secondary" onClick={() => router.push(`/tournament/${tournamentId}`)}>
-            Volver
+            {t("common.back")}
           </button>
         </div>
       )}
@@ -735,15 +734,15 @@ export default function TeamDetails() {
         }}>
           <div className="card" style={{ width: "90%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h3 style={{ margin: 0 }}>Mis Amigos de Steam</h3>
+              <h3 style={{ margin: 0 }}>{t("tournament_register.steam_friends_title")}</h3>
               <button className="btn-icon" onClick={() => setShowFriendsModal(false)}><X size={20} /></button>
             </div>
             <div style={{ overflowY: "auto", flex: 1 }}>
               {isFriendsLoading ? (
-                <LoadingSpinner text="Cargando amigos..." size={30} />
+                <LoadingSpinner size={30} />
               ) : friends.length === 0 ? (
                 <p style={{ textAlign: "center", padding: "2rem", color: "var(--color-error)" }}>
-                  No se encontraron amigos. Inicia sesión con Steam.
+                  {t("tournament_register.no_friends_found")}
                 </p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -770,16 +769,16 @@ export default function TeamDetails() {
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
-        confirmText="Sí, Eliminar"
+        confirmText={t("common.accept")}
         isDanger={confirmModal.isDanger}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
       <ConfirmModal
         isOpen={statusConfirmModal.isOpen}
-        title="Cambiar Estado de Competencia"
+        title={t("team_detail.change_status_modal_title")}
         message={`¿Seguro que deseas marcar este equipo como "${statusConfirmModal.label}"? Seguirá apareciendo en la lista pública pero como fuera de competencia.`}
-        confirmText="Sí, Cambiar Estado"
+        confirmText={t("team_detail.confirm_change_status_btn")}
         isDanger={statusConfirmModal.newStatus !== "accepted"}
         onConfirm={() => executeUpdateStatus(statusConfirmModal.newStatus, statusConfirmModal.label)}
         onCancel={() => setStatusConfirmModal({ isOpen: false, newStatus: "", label: "" })}

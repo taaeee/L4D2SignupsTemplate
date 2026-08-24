@@ -1,8 +1,24 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import ExcelJS from "exceljs";
+import { rateLimit, getClientIp, rateLimitExceededResponse } from "@/lib/rate-limit";
+
+// Rate limiter: 15 excel export requests per minute per IP
+const excelExportLimiter = rateLimit({
+  interval: 60 * 1000,
+});
 
 export async function GET(request: Request, { params }: { params: any }) {
+  const ip = getClientIp(request);
+  const { success, reset } = excelExportLimiter.check(15, `export_excel_${ip}`);
+  if (!success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+    return rateLimitExceededResponse(
+      "Demasiadas descargas de registros. Por favor, espera un momento antes de intentar de nuevo.",
+      retryAfterSeconds
+    );
+  }
+
   const resolvedParams = await params;
   const id = resolvedParams.id;
 

@@ -1,4 +1,5 @@
 import React, { CSSProperties } from 'react';
+import { useTranslation } from "@/lib/i18n";
 
 interface LoadingSpinnerProps {
   text?: string;
@@ -7,7 +8,9 @@ interface LoadingSpinnerProps {
   inline?: boolean;
 }
 
-export default function LoadingSpinner({ text = "Cargando...", size = 40, fullHeight = false, inline = false }: LoadingSpinnerProps) {
+export default function LoadingSpinner({ text, size = 40, fullHeight = false, inline = false }: LoadingSpinnerProps) {
+  const { t } = useTranslation();
+  const displayText = text !== undefined ? text : t("common.loading");
   let containerStyle: CSSProperties = fullHeight 
     ? { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }
     : { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', gap: '1rem' };
@@ -62,9 +65,9 @@ export default function LoadingSpinner({ text = "Cargando...", size = 40, fullHe
         <div className="l4d-spinner-ring"></div>
         <img src="/logos/l4dlogo.webp" alt="Loading..." className="l4d-logo-img" />
       </div>
-      {text && (
+      {displayText && (
         <span style={{ color: 'var(--muted)', fontSize: '0.95rem', fontWeight: '500', letterSpacing: '0.5px', animation: 'pulse 2s infinite' }}>
-          {text}
+          {displayText}
         </span>
       )}
     </div>

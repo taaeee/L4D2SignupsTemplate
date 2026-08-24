@@ -234,15 +234,34 @@ export async function POST(req: Request, { params }: { params: any }) {
         }
       }
 
-      // Handle Byes cascading to LB
+      // ================= CASCADE BYES IN LB =================
+      // 1. LB R1: Count how many active (non-bye) UB matches feed each LB R1 match.
+      const lbR1TeamCount: Record<string, number> = {};
       for (let i = 0; i < P / 2; i++) {
-        if (ubNodes[1][i].is_bye) {
-          const lbMatchId = ubNodes[1][i].loser_match_id;
-          if (lbMatchId) {
-            const lbMatch = insertMatches.find(m => m.id === lbMatchId);
-            if (lbMatch) {
-              lbMatch.is_bye = true;
-              lbMatch.status = 'completed';
+        const targetLbMatchId = ubNodes[1][i].loser_match_id;
+        if (targetLbMatchId) {
+          if (!lbR1TeamCount[targetLbMatchId]) lbR1TeamCount[targetLbMatchId] = 0;
+          if (!ubNodes[1][i].is_bye) {
+            lbR1TeamCount[targetLbMatchId] += 1;
+          }
+        }
+      }
+
+      for (let m = 0; m < lbNodes[1].length; m++) {
+        const lbMatch = lbNodes[1][m];
+        const incomingTeams = lbR1TeamCount[lbMatch.id] || 0;
+        if (incomingTeams <= 1) {
+          lbMatch.is_bye = true;
+          lbMatch.status = 'completed';
+
+          // If incomingTeams === 0 (Double-Bye), this LB R1 match will never produce a winner.
+          // Thus, the LB R2 match it feeds into will only receive 1 team (the UB R2 loser),
+          // so that LB R2 match must ALSO be marked as a bye!
+          if (incomingTeams === 0 && lbMatch.next_match_id) {
+            const lbR2Match = insertMatches.find(x => x.id === lbMatch.next_match_id);
+            if (lbR2Match) {
+              lbR2Match.is_bye = true;
+              lbR2Match.status = 'completed';
             }
           }
         }

@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "@/components/ConfirmModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { useTranslation } from "@/lib/i18n";
 import {
   Copy,
   Trophy,
@@ -24,6 +25,7 @@ let cachedDashboardData: any = null;
 
 export default function TorneosDashboard() {
   const { data: session, status } = useSession();
+  const { t } = useTranslation();
   const [tournaments, setTournaments] = useState(cachedDashboardData?.tournaments || []);
   const [publicTournaments, setPublicTournaments] = useState(cachedDashboardData?.publicTournaments || []);
   const [myTeams, setMyTeams] = useState(cachedDashboardData?.myTeams || []);
@@ -119,13 +121,13 @@ export default function TorneosDashboard() {
   const copyToClipboard = () => {
     if (session?.user?.id) {
       navigator.clipboard.writeText(session.user.id);
-      toast.success("¡ID copiado al portapapeles!");
+      toast.success(t("common.copied_to_clipboard"));
     }
   };
 
   if ((status === "loading" || isLoading) && !cachedDashboardData) {
     return (
-      <LoadingSpinner text="Cargando Panel..." fullHeight={true} />
+      <LoadingSpinner fullHeight={true} />
     );
   }
 
@@ -147,7 +149,7 @@ export default function TorneosDashboard() {
         }}
       >
         <h1 style={{ fontSize: "1.5rem", margin: 0 }}>
-          <span className="text-gradient">Dashboard </span>
+          <span className="text-gradient">{t("dashboard.title")}</span>
         </h1>
         <LoginButton />
       </header>
@@ -167,7 +169,7 @@ export default function TorneosDashboard() {
         >
           <div>
             <h2 style={{ margin: "0 0 0.5rem 0" }}>
-              Hola, {session.user.name}
+              {t("dashboard.hello")}, {session.user.name}
             </h2>
             <div
               style={{
@@ -178,7 +180,7 @@ export default function TorneosDashboard() {
               }}
             >
               <span className="text-muted">
-                Tu ID de usuario:
+                {t("dashboard.your_user_id")}
               </span>
               <code
                 style={{
@@ -192,7 +194,7 @@ export default function TorneosDashboard() {
               <button
                 className="btn-icon"
                 onClick={copyToClipboard}
-                title="Copiar ID"
+                title={t("dashboard.copy_id")}
               >
                 <Copy size={16} />
               </button>
@@ -210,7 +212,7 @@ export default function TorneosDashboard() {
                 padding: "0.6rem 1.2rem",
               }}
             >
-              <Settings size={16} /> Ajustes de Cuenta
+              <Settings size={16} /> {t("dashboard.account_settings")}
             </button>
           </div>
         </div>
@@ -220,19 +222,19 @@ export default function TorneosDashboard() {
             onClick={() => setActiveTab("explorar")}
             className={`tab-btn ${activeTab === "explorar" ? "active" : ""}`}
           >
-            Explorar Torneos
+            {t("dashboard.tab_explore")}
           </button>
           <button
             onClick={() => setActiveTab("torneos")}
             className={`tab-btn ${activeTab === "torneos" ? "active" : ""}`}
           >
-            Mis Torneos
+            {t("dashboard.tab_my_tournaments")}
           </button>
           <button
             onClick={() => setActiveTab("inscripciones")}
             className={`tab-btn ${activeTab === "inscripciones" ? "active" : ""}`}
           >
-            Mis Inscripciones
+            {t("dashboard.tab_my_registrations")}
           </button>
         </div>
 
@@ -248,24 +250,24 @@ export default function TorneosDashboard() {
                 gap: "1rem",
               }}
             >
-              <h2 style={{ margin: 0 }}>Torneos Públicos</h2>
+              <h2 style={{ margin: 0 }}>{t("dashboard.public_tournaments")}</h2>
               <input
                 type="text"
                 className="input-base"
-                placeholder="Buscar torneo público..."
+                placeholder={t("dashboard.search_public")}
                 value={searchExplore}
                 onChange={(e) => setSearchExplore(e.target.value)}
                 style={{ width: "100%", maxWidth: "300px" }}
               />
             </div>
 
-            {publicTournaments.filter((t: any) => t.name.toLowerCase().includes(searchExplore.toLowerCase())).length === 0 ? (
+            {publicTournaments.filter((tItem: any) => tItem.name.toLowerCase().includes(searchExplore.toLowerCase())).length === 0 ? (
               <div
                 className="card"
                 style={{ textAlign: "center", padding: "3rem" }}
               >
                 <p className="text-muted">
-                  No hay torneos disponibles en este momento.
+                  {t("dashboard.no_public_tournaments")}
                 </p>
               </div>
             ) : (
@@ -277,9 +279,9 @@ export default function TorneosDashboard() {
                     "repeat(auto-fill, minmax(300px, 1fr))",
                 }}
               >
-                {publicTournaments.filter((t: any) => t.name.toLowerCase().includes(searchExplore.toLowerCase())).map((t: any) => (
+                {publicTournaments.filter((tItem: any) => tItem.name.toLowerCase().includes(searchExplore.toLowerCase())).map((tItem: any) => (
                   <div
-                    key={t.id}
+                    key={tItem.id}
                     className="card"
                     style={{
                       display: "flex",
@@ -294,9 +296,9 @@ export default function TorneosDashboard() {
                         alignItems: "center",
                       }}
                     >
-                      {t.logo_url || t.template_json?.logo_url ? (
+                      {tItem.logo_url || tItem.template_json?.logo_url ? (
                         <img
-                          src={t.logo_url || t.template_json.logo_url}
+                          src={tItem.logo_url || tItem.template_json.logo_url}
                           alt="Logo"
                           style={{
                             width: "50px",
@@ -320,26 +322,26 @@ export default function TorneosDashboard() {
                           <Trophy size={24} color="var(--primary)" />
                         </div>
                       )}
-                      <h3 style={{ margin: 0 }}>{t.name}</h3>
+                      <h3 style={{ margin: 0 }}>{tItem.name}</h3>
                     </div>
                     <p className="text-muted text-sm" style={{ margin: 0 }}>
-                      {t.description || "Sin descripción"}
+                      {tItem.description || t("dashboard.no_description")}
                     </p>
                     <p className="text-muted text-sm" style={{ margin: 0 }}>
-                      <strong>Estado:</strong>{" "}
+                      <strong>{t("common.status")}:</strong>{" "}
                       <span
                         className={
-                          t.status === "locked"
+                          tItem.status === "locked"
                             ? "text-danger"
                             : "text-success"
                         }
                       >
-                        {t.status === "locked" ? "Cerrado" : "Abierto"}
+                        {tItem.status === "locked" ? t("common.closed") : t("common.open")}
                       </span>
                     </p>
                     <p className="text-muted text-sm" style={{ margin: 0 }}>
-                      <strong>Slots:</strong>{" "}
-                      {t.teams?.filter((team: any) => team.status === "accepted").length || 0} / {t.max_teams || "?"}
+                      <strong>{t("common.slots")}:</strong>{" "}
+                      {tItem.teams?.filter((team: any) => team.status === "accepted").length || 0} / {tItem.max_teams || "?"}
                     </p>
                     <div
                       style={{
@@ -351,9 +353,9 @@ export default function TorneosDashboard() {
                       <button
                         className="btn btn-secondary"
                         style={{ flex: 1 }}
-                        onClick={() => router.push(`/tournament/${t.id}`)}
+                        onClick={() => router.push(`/tournament/${tItem.id}`)}
                       >
-                        Ver Detalles
+                        {t("common.view_details")}
                       </button>
                     </div>
                   </div>
@@ -375,12 +377,12 @@ export default function TorneosDashboard() {
                 gap: "1rem",
               }}
             >
-              <h2 style={{ margin: 0 }}>Mis Torneos</h2>
+              <h2 style={{ margin: 0 }}>{t("dashboard.tab_my_tournaments")}</h2>
               <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
                 <input
                   type="text"
                   className="input-base"
-                  placeholder="Buscar torneo..."
+                  placeholder={t("dashboard.search_tournaments")}
                   value={searchTournaments}
                   onChange={(e) => setSearchTournaments(e.target.value)}
                   style={{ width: "100%", maxWidth: "300px" }}
@@ -389,18 +391,18 @@ export default function TorneosDashboard() {
                   className="btn btn-primary"
                   onClick={() => router.push("/tournament/create")}
                 >
-                  Crear Nuevo Torneo
+                  {t("dashboard.create_new_tournament")}
                 </button>
               </div>
             </div>
 
-            {tournaments.filter((t: any) => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).length === 0 ? (
+            {tournaments.filter((tItem: any) => tItem.name.toLowerCase().includes(searchTournaments.toLowerCase())).length === 0 ? (
               <div
                 className="card"
                 style={{ textAlign: "center", padding: "3rem" }}
               >
                 <p className="text-muted">
-                  No has creado ni moderas ningún torneo todavía.
+                  {t("dashboard.no_my_tournaments")}
                 </p>
               </div>
             ) : (
@@ -412,9 +414,9 @@ export default function TorneosDashboard() {
                     "repeat(auto-fill, minmax(300px, 1fr))",
                 }}
               >
-                {tournaments.filter((t: any) => t.name.toLowerCase().includes(searchTournaments.toLowerCase())).map((t: any) => (
+                {tournaments.filter((tItem: any) => tItem.name.toLowerCase().includes(searchTournaments.toLowerCase())).map((tItem: any) => (
                   <div
-                    key={t.id}
+                    key={tItem.id}
                     className="card"
                     style={{
                       display: "flex",
@@ -429,9 +431,9 @@ export default function TorneosDashboard() {
                         alignItems: "center",
                       }}
                     >
-                      {t.logo_url || t.template_json?.logo_url ? (
+                      {tItem.logo_url || tItem.template_json?.logo_url ? (
                         <img
-                          src={t.logo_url || t.template_json.logo_url}
+                          src={tItem.logo_url || tItem.template_json.logo_url}
                           alt="Logo"
                           style={{
                             width: "50px",
@@ -455,13 +457,13 @@ export default function TorneosDashboard() {
                           <Trophy size={24} color="var(--primary)" />
                         </div>
                       )}
-                      <h3 style={{ margin: 0 }}>{t.name}</h3>
+                      <h3 style={{ margin: 0 }}>{tItem.name}</h3>
                     </div>
                     <p className="text-muted text-sm" style={{ margin: 0 }}>
-                      {t.description || "Sin descripción"}
+                      {tItem.description || t("dashboard.no_description")}
                     </p>
                     <p className="text-muted text-sm" style={{ margin: 0 }}>
-                      <strong>Equipos Aceptados:</strong> {t.teams?.filter((team: any) => team.status === "accepted").length || 0} / {t.max_teams || "?"}
+                      <strong>{t("dashboard.accepted_teams")}</strong> {tItem.teams?.filter((team: any) => team.status === "accepted").length || 0} / {tItem.max_teams || "?"}
                     </p>
                     <div
                       style={{
@@ -473,15 +475,15 @@ export default function TorneosDashboard() {
                       <button
                         className="btn btn-secondary"
                         style={{ flex: 1 }}
-                        onClick={() => router.push(`/tournament/${t.id}`)}
+                        onClick={() => router.push(`/tournament/${tItem.id}`)}
                       >
-                        Gestionar
+                        {t("common.manage")}
                       </button>
                       <button
                         className="btn btn-secondary btn-icon"
-                        title="Configuración"
+                        title={t("tournament_detail.edit_tournament")}
                         onClick={() =>
-                          router.push(`/tournament/${t.id}/edit`)
+                          router.push(`/tournament/${tItem.id}/edit`)
                         }
                         style={{
                           padding: "0.75rem",
@@ -512,30 +514,29 @@ export default function TorneosDashboard() {
                 gap: "1rem",
               }}
             >
-              <h2 style={{ margin: 0 }}>Equipos Registrados</h2>
+              <h2 style={{ margin: 0 }}>{t("dashboard.registered_teams")}</h2>
               <input
                 type="text"
                 className="input-base"
-                placeholder="Buscar por equipo o torneo..."
+                placeholder={t("dashboard.search_registrations")}
                 value={searchRegistrations}
                 onChange={(e) => setSearchRegistrations(e.target.value)}
                 style={{ width: "100%", maxWidth: "300px" }}
               />
             </div>
 
-            {myTeams.filter((t: any) => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).length === 0 ? (
+            {myTeams.filter((team: any) => team.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || team.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).length === 0 ? (
               <div
                 className="card"
                 style={{ textAlign: "center", padding: "3rem" }}
               >
                 <p className="text-muted">
-                  No te has inscrito a ningún torneo todavía.
+                  {t("dashboard.no_my_registrations")}
                 </p>
               </div>
             ) : (
               <div className="my-registrations-grid">
-                {myTeams.filter((t: any) => t.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || t.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).map((team: any) => {
-                  const isPending = team.status === "pending";
+                {myTeams.filter((team: any) => team.name.toLowerCase().includes(searchRegistrations.toLowerCase()) || team.tournaments?.name.toLowerCase().includes(searchRegistrations.toLowerCase())).map((team: any) => {
                   const isAccepted = team.status === "accepted";
                   const isLocked = team.tournaments?.status === "locked";
 
@@ -591,7 +592,7 @@ export default function TorneosDashboard() {
                             flexShrink: 0,
                           }}
                         >
-                          {isAccepted ? "Aceptado" : "Pendiente"}
+                          {isAccepted ? t("common.accepted") : t("common.pending")}
                         </span>
                       </div>
 
@@ -638,7 +639,7 @@ export default function TorneosDashboard() {
                           style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}
                         >
                           <span className="text-xs text-muted" style={{ textDecoration: "none", lineHeight: 1.2 }}>
-                            Torneo Inscrito
+                            {t("dashboard.registered_tournament")}
                           </span>
                           <span
                             style={{
@@ -652,7 +653,7 @@ export default function TorneosDashboard() {
                               lineHeight: 1.3,
                             }}
                           >
-                            {team.tournaments?.name || "Desconocido"}
+                            {team.tournaments?.name || t("common.unknown")}
                           </span>
                         </div>
                       </Link>
@@ -662,7 +663,7 @@ export default function TorneosDashboard() {
                           className="text-danger text-sm"
                           style={{ margin: 0, fontWeight: "bold" }}
                         >
-                          Torneo cerrado (En progreso)
+                          {t("dashboard.tournament_locked_badge")}
                         </p>
                       )}
 
@@ -684,7 +685,7 @@ export default function TorneosDashboard() {
                             );
                           }}
                         >
-                          Ver Equipo
+                          {t("dashboard.view_team")}
                         </button>
                       </div>
                     </div>
@@ -703,7 +704,7 @@ export default function TorneosDashboard() {
           paddingBottom: "2rem",
         }}
       >
-        <p className="text-muted text-sm">Powered by Colossus Corporation®</p>
+        <p className="text-muted text-sm">{t("common.powered_by")}</p>
       </footer>
     </div>
   );

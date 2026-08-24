@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Radio,
@@ -34,10 +35,14 @@ import {
 import { toast } from "sonner";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ConfirmModal from "@/components/ConfirmModal";
+import ScoreModal from "@/components/ScoreModal";
+import ChooseMapModal from "@/components/ChooseMapModal";
+import CasterMatchCard from "@/components/CasterMatchCard";
 import { useCasterStatus } from "@/lib/useCasterStatus";
 import { fetchBansInBatches } from "@/lib/ban-checker";
 import { supabase } from "@/lib/supabase";
 import { normalizeLanguages, MAIN_CASTER_LANGUAGES } from "@/lib/language-helper";
+import { useTranslation } from "@/lib/i18n";
 
 // Brand Platform SVGs
 const TwitchIcon = ({ size = 16, className = "", color, style }: { size?: number; className?: string; color?: string; style?: React.CSSProperties }) => (
@@ -64,16 +69,36 @@ const SteamIcon = ({ size = 14, className = "", color, style }: { size?: number;
   </svg>
 );
 
-export const extractPlatformUsername = (channelOrUrl?: string | null) => {
-  if (!channelOrUrl) return "";
-  let clean = channelOrUrl.trim();
-  clean = clean.replace(/^https?:\/\//i, "");
-  clean = clean.replace(/^www\./i, "");
-  clean = clean.replace(/^(twitch\.tv|kick\.com|youtube\.com|youtu\.be)\//i, "");
-  clean = clean.replace(/^(c\/|user\/|channel\/)/i, "");
-  clean = clean.split("/")[0].split("?")[0];
-  return clean || channelOrUrl;
-};
+// Verified Badge SVG (X / Facebook style)
+const VerifiedBadgeIcon = ({ size = 18, color = "var(--primary)", checkColor = "#000", className = "", style }: { size?: number; color?: string; checkColor?: string; className?: string; style?: React.CSSProperties }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={className}
+    style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
+  >
+    <path
+      fill={color}
+      d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.67-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34z"
+    />
+    <path
+      fill={checkColor}
+      d="M10.5 16.5l-4-4 1.41-1.41L10.5 13.67l6.59-6.59 1.41 1.41-8 8z"
+    />
+  </svg>
+);
+
+import {
+  extractPlatformUsername,
+  parseTeamData,
+  parsePlayerRoleTitle,
+  detectPlatform,
+  getMatchStatus,
+} from "@/lib/match-utils";
+
+export { extractPlatformUsername, parseTeamData, parsePlayerRoleTitle, detectPlatform, getMatchStatus };
 
 export const formatYoutubeUrl = (channelOrUrl?: string | null) => {
   if (!channelOrUrl) return "https://youtube.com";
@@ -90,46 +115,8 @@ export const formatYoutubeUrl = (channelOrUrl?: string | null) => {
   return `https://www.youtube.com/@${trimmed}`;
 };
 
-// Helpers
-export const parseTeamData = (team: any) => {
-  let logo = team?.logo_url || null;
-  let tag = "";
-  let countries: any[] = [];
-  let answers: any = {};
-
-  if (team?.logo_url && typeof team.logo_url === "string" && team.logo_url.startsWith("{")) {
-    try {
-      const parsed = JSON.parse(team.logo_url);
-      logo = parsed.url || parsed.logo || null;
-      tag = parsed.tag || "";
-      countries = Array.isArray(parsed.countries) ? parsed.countries : [];
-      answers = parsed.answers || {};
-    } catch { }
-  }
-
-  return { logo, tag, countries, answers };
-};
-
-export const parsePlayerRoleTitle = (roleVal: any): string => {
-  if (!roleVal) return "Miembro";
-  if (typeof roleVal === "string" && roleVal.startsWith("{")) {
-    try {
-      const parsed = JSON.parse(roleVal);
-      return parsed.title || "Miembro";
-    } catch {
-      return roleVal;
-    }
-  }
-  return String(roleVal);
-};
-
-export const detectPlatform = (url?: string | null): "twitch" | "kick" | "youtube" | "generic" => {
-  if (!url) return "generic";
-  const lower = url.toLowerCase();
-  if (lower.includes("twitch.tv") || lower.includes("twitch")) return "twitch";
-  if (lower.includes("kick.com") || lower.includes("kick")) return "kick";
-  if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "youtube";
-  return "generic";
+export const invalidateCasterCache = () => {
+  cachedCasterDashboardData = null;
 };
 
 // Client-side cache to eliminate full-page loading flashes
@@ -139,9 +126,47 @@ let cachedCasterDashboardData: {
   timestamp: number;
 } | null = null;
 
+// Client-safe formatted date component to avoid SSR timezone/locale hydration mismatches
+function MatchFormattedDate({ date }: { date: string | null | undefined }) {
+  const [formatted, setFormatted] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!date) return;
+    try {
+      setFormatted(
+        new Date(date).toLocaleDateString("es-ES", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
+    } catch {
+      setFormatted(null);
+    }
+  }, [date]);
+
+  if (!date || !formatted) return null;
+
+  return (
+    <span className="text-muted" style={{ display: "flex", alignItems: "center", gap: "0.25rem" }} suppressHydrationWarning>
+      <Calendar size={12} />
+      {formatted}
+    </span>
+  );
+}
+
 export default function CasterHubPage() {
+  const { t } = useTranslation();
+  const [mounted, setMounted] = useState(false);
   const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
   const { isCaster, caster, application, casterData, isLoading: isCasterLoading, refreshCasterStatus } = useCasterStatus();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"my_matches" | "available_matches" | "profile_requests">("my_matches");
@@ -187,6 +212,32 @@ export default function CasterHubPage() {
     isOpen: false,
     matchId: null,
     isSubmitting: false,
+  });
+
+  // Score Modal State for Caster
+  const [scoreModal, setScoreModal] = useState<{
+    isOpen: boolean;
+    match: any | null;
+    team1: any | null;
+    team2: any | null;
+    isSaving: boolean;
+  }>({
+    isOpen: false,
+    match: null,
+    team1: null,
+    team2: null,
+    isSaving: false,
+  });
+
+  // Choose Map Modal State for Caster
+  const [chooseMapModal, setChooseMapModal] = useState<{
+    isOpen: boolean;
+    match: any | null;
+    isSaving: boolean;
+  }>({
+    isOpen: false,
+    match: null,
+    isSaving: false,
   });
 
   // Profile Edit Request Form State
@@ -472,19 +523,20 @@ export default function CasterHubPage() {
     const casterName = application?.alias || caster?.alias || session?.user?.name || "Caster Oficial";
     const assignedStream = match.assigned_casters?.[0]?.stream_url || caster?.twitch_channel || "";
 
-    const textToCopy = `🎮 =============================
-🏆 TORNEO: ${match.tournaments?.name || "Torneo L4D2"}
-⚔️ PARTIDO: ${match.team1?.name || "Equipo 1"} ${t1Countries ? `(${t1Countries})` : ""} vs ${match.team2?.name || "Equipo 2"} ${t2Countries ? `(${t2Countries})` : ""}
-📅 ESTADO: ${match.is_live ? "🔴 EN VIVO AHORA" : match.is_completed ? "✅ FINALIZADO" : "⏳ PRÓXIMO"}
-🗺️ MAPAS: ${maps}
-🎙️ CASTER: ${casterName}
-${assignedStream ? `📺 TRANSMISIÓN: ${assignedStream}` : ""}
+    const textToCopy = `[FICHA DE TRANSMISIÓN OFICIAL]
+=============================
+TORNEO: ${match.tournaments?.name || "Torneo L4D2"}
+PARTIDO: ${match.team1?.name || "Equipo 1"} ${t1Countries ? `(${t1Countries})` : ""} vs ${match.team2?.name || "Equipo 2"} ${t2Countries ? `(${t2Countries})` : ""}
+ESTADO: ${match.is_live ? "EN VIVO" : match.is_completed ? "FINALIZADO" : "PRÓXIMO"}
+MAPAS: ${maps}
+CASTER: ${casterName}
+${assignedStream ? `TRANSMISIÓN: ${assignedStream}` : ""}
 =============================
 
-👥 ROSTER ${match.team1?.name || "Equipo 1"}:
+ROSTER ${match.team1?.name || "Equipo 1"}:
 ${t1Roster || "  • Sin jugadores registrados"}
 
-👥 ROSTER ${match.team2?.name || "Equipo 2"}:
+ROSTER ${match.team2?.name || "Equipo 2"}:
 ${t2Roster || "  • Sin jugadores registrados"}
 =============================`;
 
@@ -500,7 +552,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
     const kick = caster?.kick_channel || application?.kick_channel;
     const stream = twitch ? `https://twitch.tv/${twitch}` : kick ? `https://kick.com/${kick}` : window.location.href;
 
-    navigator.clipboard.writeText(`🎙️ Sigue las transmisiones oficiales de Left 4 Dead 2 narradas por ${casterName}: ${stream}`);
+    navigator.clipboard.writeText(`Sigue las transmisiones oficiales de Left 4 Dead 2 narradas por ${casterName}: ${stream}`);
     setCopiedProfile(true);
     toast.success("¡Enlace de caster copiado al portapapeles!");
     setTimeout(() => setCopiedProfile(false), 3000);
@@ -550,6 +602,142 @@ ${t2Roster || "  • Sin jugadores registrados"}
     } finally {
       setStreamModal((prev) => ({ ...prev, isSubmitting: false }));
     }
+  };
+
+  // Match Status update (Pause stream / Start stream)
+  const handleSetMatchStatus = async (matchId: string, status: string) => {
+    try {
+      const res = await fetch(`/api/matches/${matchId}/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "No se pudo actualizar el estado del partido.");
+      } else {
+        toast.success(
+          status === "in_progress"
+            ? "Partido iniciado EN VIVO."
+            : "Transmisión pausada exitosamente."
+        );
+        fetchMatches();
+      }
+    } catch (e) {
+      toast.error("Error de red al actualizar estado.");
+    }
+  };
+
+  const handleOpenFinalizeMatch = (match: any) => {
+    setScoreModal({
+      isOpen: true,
+      match,
+      team1: match.team1 || { id: match.team1_id, name: match.team1_id ? "Equipo 1" : "Por Definir" },
+      team2: match.team2 || { id: match.team2_id, name: match.team2_id ? "Equipo 2" : "Por Definir" },
+      isSaving: false,
+    });
+  };
+
+  const handleSaveScore = async (data: { score1: number; score2: number; winner_id: string }) => {
+    if (!scoreModal.match) return;
+    setScoreModal((prev) => ({ ...prev, isSaving: true }));
+    try {
+      const res = await fetch(`/api/matches/${scoreModal.match.id}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result.error || "Error al registrar el resultado.");
+      } else {
+        toast.success("Resultado guardado y partido finalizado exitosamente.");
+        setScoreModal({ isOpen: false, match: null, team1: null, team2: null, isSaving: false });
+        fetchMatches();
+      }
+    } catch (e) {
+      toast.error("Error de red al registrar el resultado.");
+    } finally {
+      setScoreModal((prev) => ({ ...prev, isSaving: false }));
+    }
+  };
+
+  // Choose Maps Handlers
+  const handleOpenChooseMapModal = (match: any) => {
+    setChooseMapModal({
+      isOpen: true,
+      match,
+      isSaving: false,
+    });
+  };
+
+  const handleSaveChosenMaps = async (selectedMaps: string[]) => {
+    if (!chooseMapModal.match) return;
+    setChooseMapModal((prev) => ({ ...prev, isSaving: true }));
+    try {
+      const res = await fetch(`/api/matches/${chooseMapModal.match.id}/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedMaps }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "No se pudo actualizar los mapas.");
+      } else {
+        toast.success("Mapas del partido actualizados correctamente.");
+        setChooseMapModal({ isOpen: false, match: null, isSaving: false });
+        fetchMatches();
+      }
+    } catch (e) {
+      toast.error("Error al guardar los mapas.");
+    } finally {
+      setChooseMapModal((prev) => ({ ...prev, isSaving: false }));
+    }
+  };
+
+  // Generate Direct Veto for Match
+  const handleGenerateVeto = (match: any) => {
+    if (match.map_veto_id) {
+      router.push(`/map-veto/${match.map_veto_id}`);
+      return;
+    }
+    const templateJson = match.tournaments?.template_json || {};
+    const roundMetadata = templateJson.round_metadata || {};
+    const roundKey = match.is_upper ? `Upper Bracket-${match.round}` : `Lower Bracket-${match.round}`;
+    const fallbackKey1 = `null-${match.round}`;
+    const fallbackKey2 = `Ronda ${match.round}`;
+    const fallbackKey3 = `${match.round}`;
+
+    const rawMeta =
+      roundMetadata[roundKey] ||
+      roundMetadata[fallbackKey1] ||
+      roundMetadata[fallbackKey2] ||
+      roundMetadata[fallbackKey3];
+
+    let format = "bo1";
+    let maps: string[] = [];
+
+    if (typeof rawMeta === "string") {
+      const lower = rawMeta.toLowerCase();
+      if (lower.includes("bo3") || lower.includes("3")) format = "bo3";
+      else if (lower.includes("bo5") || lower.includes("5")) format = "bo5";
+      else if (lower.includes("bo2") || lower.includes("to2") || lower.includes("2")) format = "to2";
+    } else if (rawMeta && typeof rawMeta === "object") {
+      format = rawMeta.format || "bo1";
+      if (Array.isArray(rawMeta.maps) && rawMeta.maps.length > 0) {
+        maps = rawMeta.maps;
+      }
+    }
+
+    if (maps.length === 0 && Array.isArray(match.selected_maps) && match.selected_maps.length > 0) {
+      maps = match.selected_maps;
+    }
+
+    const mapsParam = maps.length > 0 ? `&maps=${encodeURIComponent(maps.join(","))}` : "";
+    router.push(
+      `/map-veto?matchId=${match.id}&tournamentId=${match.tournament_id}&teamA=${match.team1_id}&teamB=${match.team2_id}&format=${format}${mapsParam}`
+    );
   };
 
   const handleExecuteUnassign = async () => {
@@ -648,6 +836,14 @@ ${t2Roster || "  • Sin jugadores registrados"}
 
   // ─── Auth & Permissions fallback states ───────────────────────────────
 
+  if (!mounted || sessionStatus === "loading" || (sessionStatus === "authenticated" && isCasterLoading)) {
+    return (
+      <div className="container" style={{ display: "flex", flexDirection: "column", minHeight: "80vh", justifyContent: "center", alignItems: "center" }}>
+        <LoadingSpinner text={t("common.loading")} />
+      </div>
+    );
+  }
+
   if (sessionStatus === "unauthenticated") {
     return (
       <div className="container" style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
@@ -672,17 +868,17 @@ ${t2Roster || "  • Sin jugadores registrados"}
               <Radio size={32} color="var(--primary)" />
             </div>
             <h1 style={{ fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.75rem" }}>
-              Centro de Casters
+              {t("caster.hub_title")}
             </h1>
             <p className="text-muted" style={{ margin: "0 0 2rem", lineHeight: 1.6 }}>
-              Inicia sesión con tu cuenta para acceder a la cabina de transmisión, gestionar tus partidos asignados y consultar alineaciones oficiales.
+              {t("caster.login_to_cast")}
             </p>
             <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
               <Link href="/login" id="login-caster-hub-btn" className="btn btn-primary" style={{ fontWeight: "bold" }}>
-                <Sparkles size={18} /> Iniciar Sesión
+                <Sparkles size={18} /> {t("auth.login_btn")}
               </Link>
               <Link href="/matches" id="view-matches-guest-btn" className="btn btn-secondary">
-                <Swords size={18} /> Ver Matches Públicos
+                <Swords size={18} /> {t("caster.explore_matches")}
               </Link>
             </div>
           </div>
@@ -691,7 +887,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
     );
   }
 
-  if (sessionStatus === "authenticated" && !isCasterLoading && !isCaster) {
+  if (sessionStatus === "authenticated" && !isCaster) {
     return (
       <div className="container" style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 0" }}>
@@ -716,10 +912,10 @@ ${t2Roster || "  • Sin jugadores registrados"}
             </div>
 
             <h1 style={{ fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.75rem" }}>
-              Únete al Equipo de Casters
+              {t("caster.join_team_title")}
             </h1>
             <p className="text-muted" style={{ margin: "0 0 2rem", lineHeight: 1.6 }}>
-              Narra las partidas oficiales de Left 4 Dead 2. Como Caster Oficial, tu canal de Twitch, Kick o YouTube se transmitirá directamente en los brackets y fichas de torneos.
+              {t("caster.join_team_desc")}
             </p>
 
             {/* Feature Highlights */}
@@ -727,17 +923,17 @@ ${t2Roster || "  • Sin jugadores registrados"}
               <div style={{ padding: "1rem", borderRadius: "var(--radius-lg)", background: "rgba(0,0,0,0.3)", border: "1px solid var(--border-light)" }}>
                 <Tv size={16} color="var(--primary)" style={{ marginBottom: "0.5rem" }} />
                 <div style={{ fontSize: "0.8rem", fontWeight: "bold", marginBottom: "0.25rem" }}>Stream en Brackets</div>
-                <div className="text-muted" style={{ fontSize: "0.7rem", lineHeight: 1.4 }}>Tu canal embebido en las vistas públicas de partidos.</div>
+                <div className="text-muted" style={{ fontSize: "0.7rem", lineHeight: 1.4 }}>{t("caster.feature_brackets")}</div>
               </div>
               <div style={{ padding: "1rem", borderRadius: "var(--radius-lg)", background: "rgba(0,0,0,0.3)", border: "1px solid var(--border-light)" }}>
                 <Users size={16} color="#9146FF" style={{ marginBottom: "0.5rem" }} />
                 <div style={{ fontSize: "0.8rem", fontWeight: "bold", marginBottom: "0.25rem" }}>Rosters & Fichas</div>
-                <div className="text-muted" style={{ fontSize: "0.7rem", lineHeight: 1.4 }}>Acceso instantáneo a países, horas y datos para OBS.</div>
+                <div className="text-muted" style={{ fontSize: "0.7rem", lineHeight: 1.4 }}>{t("caster.feature_rosters")}</div>
               </div>
               <div style={{ padding: "1rem", borderRadius: "var(--radius-lg)", background: "rgba(0,0,0,0.3)", border: "1px solid var(--border-light)" }}>
                 <ShieldCheck size={16} color="#facc15" style={{ marginBottom: "0.5rem" }} />
-                <div style={{ fontSize: "0.8rem", fontWeight: "bold", marginBottom: "0.25rem" }}>Insignia Oficial</div>
-                <div className="text-muted" style={{ fontSize: "0.7rem", lineHeight: 1.4 }}>Distintivo verificado en tu perfil y transmisiones.</div>
+                <div style={{ fontSize: "0.8rem", fontWeight: "bold", marginBottom: "0.25rem" }}>{t("caster.feature_badge")}</div>
+                <div className="text-muted" style={{ fontSize: "0.7rem", lineHeight: 1.4 }}>{t("caster.official_caster_badge")}</div>
               </div>
             </div>
 
@@ -756,19 +952,19 @@ ${t2Roster || "  • Sin jugadores registrados"}
               >
                 <Clock size={20} color="#facc15" />
                 <div style={{ textAlign: "left" }}>
-                  <strong style={{ color: "#facc15", display: "block" }}>Solicitud en Revisión</strong>
+                  <strong style={{ color: "#facc15", display: "block" }}>{t("caster.pending_review_title")}</strong>
                   <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-                    Tu postulación está siendo revisada por los organizadores del torneo.
+                    {t("caster.pending_review_desc")}
                   </span>
                 </div>
               </div>
             ) : (
               <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
                 <Link href="/settings#caster" id="apply-caster-hub-btn" className="btn btn-primary" style={{ fontWeight: "bold" }}>
-                  <Sparkles size={18} /> Postularme como Caster Oficial
+                  <Sparkles size={18} /> {t("caster.request_caster_role")}
                 </Link>
                 <Link href="/matches" id="explore-matches-hub-btn" className="btn btn-secondary">
-                  <Swords size={18} /> Explorar Matches
+                  <Swords size={18} /> {t("caster.explore_matches")}
                 </Link>
               </div>
             )}
@@ -816,35 +1012,17 @@ ${t2Roster || "  • Sin jugadores registrados"}
               <span className="text-gradient">Caster</span> Hub
             </h1>
             <p className="text-muted text-sm" style={{ margin: 0 }}>
-              Gestiona tus transmisiones, rosters y alineaciones oficiales
+              {t("caster.hub_desc")}
             </p>
           </div>
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Caster Badge */}
-          <div
-            style={{
-              background: "var(--primary-glow)",
-              border: "1px solid rgba(111, 175, 58, 0.3)",
-              padding: "0.5rem 1rem",
-              borderRadius: "var(--radius-md)",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
-          >
-            <ShieldCheck size={16} color="var(--primary)" />
-            <span style={{ fontSize: "0.85rem", fontWeight: "bold", color: "var(--primary)" }}>
-              {casterDisplayName}
-            </span>
-          </div>
-
           {/* Share Profile */}
           <button
             onClick={handleShareProfile}
             id="btn-share-caster-profile"
-            title="Copiar enlace de caster"
+            title={t("caster.share_profile_tooltip")}
             className="btn-icon"
             style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem" }}
           >
@@ -855,7 +1033,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
           <button
             onClick={() => fetchMatches(true)}
             id="btn-refresh-caster-hub"
-            title="Actualizar datos"
+            title={t("common.refresh")}
             disabled={isRefreshing}
             className="btn-icon"
           >
@@ -893,9 +1071,21 @@ ${t2Roster || "  • Sin jugadores registrados"}
             }}
           />
           <div>
-            <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.1rem" }}>{casterDisplayName}</h2>
+            <h2
+              style={{
+                margin: "0 0 0.25rem",
+                fontSize: "1.15rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+              }}
+              suppressHydrationWarning
+            >
+              <span>{casterDisplayName}</span>
+              <VerifiedBadgeIcon size={18} color="var(--primary)" checkColor="#000" />
+            </h2>
             <p className="text-muted text-sm" style={{ margin: 0 }}>
-              {application?.bio || caster?.bio || "Biografía no disponible."}
+              {application?.bio || caster?.bio || t("caster.no_bio")}
             </p>
             {/* Streaming Channel Links */}
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
@@ -940,18 +1130,18 @@ ${t2Roster || "  • Sin jugadores registrados"}
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <div style={{ textAlign: "center", padding: "0.5rem 1rem", background: "rgba(0,0,0,0.2)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", minWidth: "70px" }}>
             <div style={{ fontSize: "1.25rem", fontWeight: "bold", color: "var(--primary)", fontFamily: "monospace" }}>{stats.total}</div>
-            <div className="text-muted" style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: "bold" }}>Asignados</div>
+            <div className="text-muted" style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: "bold" }}>{t("caster.assigned_stat")}</div>
           </div>
           <div style={{ textAlign: "center", padding: "0.5rem 1rem", background: "rgba(239, 68, 68, 0.05)", borderRadius: "var(--radius-md)", border: "1px solid rgba(239, 68, 68, 0.2)", minWidth: "70px" }}>
             <div style={{ fontSize: "1.25rem", fontWeight: "bold", color: "#f87171", fontFamily: "monospace", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}>
               {stats.live > 0 && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ef4444", animation: "fadeIn 1s ease infinite alternate" }} />}
               {stats.live}
             </div>
-            <div style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: "bold", color: "#fca5a5" }}>En Vivo</div>
+            <div style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: "bold", color: "#fca5a5" }}>{t("matches.live_badge")}</div>
           </div>
           <div style={{ textAlign: "center", padding: "0.5rem 1rem", background: "rgba(0,0,0,0.2)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", minWidth: "70px" }}>
             <div style={{ fontSize: "1.25rem", fontWeight: "bold", color: "#facc15", fontFamily: "monospace" }}>{stats.upcoming}</div>
-            <div className="text-muted" style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: "bold" }}>Próximos</div>
+            <div className="text-muted" style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: "bold" }}>{t("matches.tab_upcoming")}</div>
           </div>
         </div>
       </div>
@@ -977,8 +1167,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <AlertCircle size={18} color="#facc15" />
             <div>
-              <strong style={{ color: "#facc15" }}>Solicitud de cambio enviada:</strong>{" "}
-              <span className="text-muted">Tu actualización está siendo revisada por moderación.</span>
+              <strong style={{ color: "#facc15" }}>{t("caster.changes_pending_notice")}</strong>
             </div>
           </div>
           <button
@@ -987,7 +1176,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
             className="btn btn-secondary text-sm"
             style={{ padding: "0.4rem 0.8rem" }}
           >
-            Ver Solicitud
+            {t("caster.tab_profile")}
           </button>
         </div>
       )}
@@ -1000,7 +1189,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
           className={`tab-btn ${activeTab === "my_matches" ? "active" : ""}`}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-            <Tv size={16} /> Mis Matches
+            <Tv size={16} /> {t("caster.tab_my_matches")}
             <span className="badge" style={{ fontSize: "0.7rem", padding: "0.15rem 0.5rem" }}>{myMatches.length}</span>
             {stats.live > 0 && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ef4444" }} />}
           </span>
@@ -1011,7 +1200,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
           className={`tab-btn ${activeTab === "available_matches" ? "active" : ""}`}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-            <Swords size={16} /> Disponibles
+            <Swords size={16} /> {t("caster.tab_available")}
             <span className="badge" style={{ fontSize: "0.7rem", padding: "0.15rem 0.5rem" }}>{availableMatches.length}</span>
           </span>
         </button>
@@ -1021,7 +1210,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
           className={`tab-btn ${activeTab === "profile_requests" ? "active" : ""}`}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-            <Settings size={16} /> Mi Perfil
+            <Settings size={16} /> {t("caster.tab_profile")}
             {isPendingReview && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#facc15" }} />}
           </span>
         </button>
@@ -1046,10 +1235,10 @@ ${t2Roster || "  • Sin jugadores registrados"}
             {/* Status Filters */}
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               {[
-                { id: "all" as const, label: "Todos", count: stats.total, icon: <Swords size={16} /> },
-                { id: "live" as const, label: "En Vivo", count: stats.live, icon: <Radio size={16} /> },
-                { id: "upcoming" as const, label: "Próximos", count: stats.upcoming, icon: <Clock size={16} /> },
-                { id: "completed" as const, label: "Finalizados", count: stats.completed, icon: <CheckCircle2 size={16} /> },
+                { id: "all" as const, label: t("common.all"), count: stats.total, icon: <Swords size={16} /> },
+                { id: "live" as const, label: t("matches.live_badge"), count: stats.live, icon: <Radio size={16} /> },
+                { id: "upcoming" as const, label: t("matches.tab_upcoming"), count: stats.upcoming, icon: <Clock size={16} /> },
+                { id: "completed" as const, label: t("matches.tab_completed"), count: stats.completed, icon: <CheckCircle2 size={16} /> },
               ].map((pill) => (
                 <button
                   key={pill.id}
@@ -1068,7 +1257,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
               {tournaments.length > 0 && (
                 <div style={{ flex: "1 1 200px" }}>
                   <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", marginBottom: "0.3rem" }}>
-                    Torneo
+                    {t("matches.active_tournament")}
                   </label>
                   <select
                     className="input-base"
@@ -1076,7 +1265,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                     onChange={(e) => setSelectedTournament(e.target.value)}
                     style={{ width: "100%", fontSize: "0.9rem", padding: "0.6rem" }}
                   >
-                    <option value="all">Todos los Torneos</option>
+                    <option value="all">{t("matches.filter_all_tournaments")}</option>
                     {tournaments.map((t) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
@@ -1085,14 +1274,14 @@ ${t2Roster || "  • Sin jugadores registrados"}
               )}
               <div style={{ flex: "2 1 250px" }}>
                 <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", marginBottom: "0.3rem" }}>
-                  Buscar equipo o torneo
+                  {t("matches.search_placeholder")}
                 </label>
                 <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                   <Search size={18} style={{ position: "absolute", left: "12px", color: "var(--text-muted)", pointerEvents: "none" }} />
                   <input
                     type="text"
                     className="input-base"
-                    placeholder="Buscar..."
+                    placeholder={t("matches.search_match_placeholder")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     style={{ width: "100%", paddingLeft: "2.4rem", fontSize: "0.9rem" }}
@@ -1104,7 +1293,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
 
           {/* Matches List */}
           {isLoadingMatches && !cachedCasterDashboardData ? (
-            <LoadingSpinner text="Cargando tus matches asignados..." />
+            <LoadingSpinner text={t("common.loading")} />
           ) : myMatches.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: "4rem 2rem" }}>
               <div
@@ -1121,11 +1310,11 @@ ${t2Roster || "  • Sin jugadores registrados"}
               >
                 <Tv size={28} color="var(--text-muted)" />
               </div>
-              <h3 style={{ margin: "0 0 0.5rem" }}>No se encontraron matches</h3>
+              <h3 style={{ margin: "0 0 0.5rem" }}>{t("caster.no_my_matches")}</h3>
               <p className="text-muted text-sm" style={{ margin: "0 0 1.5rem" }}>
                 {stats.total === 0
-                  ? "Aún no tienes ningún match asignado. Revisa la pestaña de 'Disponibles' para vincularte a un partido."
-                  : "Prueba cambiando el filtro de estado o limpiando el texto de búsqueda."}
+                  ? t("caster.no_my_matches_desc")
+                  : t("matches.no_matches_desc")}
               </p>
               {stats.total === 0 && (
                 <button
@@ -1133,428 +1322,32 @@ ${t2Roster || "  • Sin jugadores registrados"}
                   id="browse-available-matches-btn"
                   className="btn btn-primary"
                 >
-                  <Swords size={16} /> Ver Matches Disponibles
+                  <Swords size={16} /> {t("caster.browse_available_btn")}
                 </button>
               )}
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-              {myMatches.map((match) => {
-                const t1Data = parseTeamData(match.team1);
-                const t2Data = parseTeamData(match.team2);
-                const isExpanded = !!expandedRosters[match.id];
-
-                const t1Players: any[] = match.team1?.team_members || [];
-                const t2Players: any[] = match.team2?.team_members || [];
-
-                const t1Hours = t1Players.map((p) => Number(p.l4d2_playtime_hours) || 0);
-                const t2Hours = t2Players.map((p) => Number(p.l4d2_playtime_hours) || 0);
-
-                const t1AvgHours = t1Hours.length > 0 ? Math.round(t1Hours.reduce((a, b) => a + b, 0) / t1Hours.length) : 0;
-                const t2AvgHours = t2Hours.length > 0 ? Math.round(t2Hours.reduce((a, b) => a + b, 0) / t2Hours.length) : 0;
-
-                const assignedCasterObj = (match.assigned_casters || []).find(
-                  (c: any) =>
-                    c.caster_id === currentCasterId ||
-                    c.casters?.user_id === currentUserId ||
-                    c.casters?.id === currentCasterId
-                );
-
-                const streamPlatform = detectPlatform(assignedCasterObj?.stream_url);
-
-                return (
-                  <div
-                    key={match.id}
-                    className="card"
-                    style={{ padding: 0, overflow: "hidden" }}
-                  >
-                    {/* Match Header Bar */}
-                    <div
-                      style={{
-                        background: "rgba(0,0,0,0.3)",
-                        padding: "0.75rem 1.25rem",
-                        borderBottom: "1px solid var(--border-light)",
-                        display: "flex",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "0.5rem",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        {match.tournaments?.logo_url ? (
-                          <img src={match.tournaments.logo_url} alt="Logo Torneo" style={{ width: "18px", height: "18px", borderRadius: "4px", objectFit: "cover" }} />
-                        ) : (
-                          <Trophy size={14} color="var(--primary)" />
-                        )}
-                        <span style={{ fontWeight: "bold" }}>{match.tournaments?.name || "Torneo L4D2"}</span>
-                        <span className="text-muted">•</span>
-                        <span className="text-muted">
-                          {match.round ? `Ronda ${match.round}` : "Match Oficial"}
-                          {match.is_grand_final ? " • Gran Final" : ""}
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        {match.scheduled_at && (
-                          <span className="text-muted" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                            <Calendar size={12} />
-                            {new Date(match.scheduled_at).toLocaleDateString("es-ES", {
-                              weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-                            })}
-                          </span>
-                        )}
-                        {match.is_live ? (
-                          <span className="badge" style={{ background: "rgba(239, 68, 68, 0.2)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.4)", fontWeight: "bold", gap: "0.35rem" }}>
-                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ef4444" }} /> EN VIVO
-                          </span>
-                        ) : match.is_completed ? (
-                          <span className="badge" style={{ background: "rgba(111, 175, 58, 0.15)", color: "var(--primary)", border: "1px solid rgba(111, 175, 58, 0.3)", gap: "0.25rem" }}>
-                            <CheckCircle2 size={12} /> Finalizado
-                          </span>
-                        ) : (
-                          <span className="badge" style={{ background: "rgba(250, 204, 21, 0.15)", color: "#facc15", border: "1px solid rgba(250, 204, 21, 0.3)" }}>
-                            Por Jugar
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Teams Matchup */}
-                    <div style={{ padding: "1.25rem 1.5rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", justifyContent: "center" }}>
-                        {/* Team 1 */}
-                        <div style={{ flex: "1 1 280px", display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem", borderRadius: "var(--radius-md)", background: "rgba(0,0,0,0.2)", border: "1px solid var(--border-light)" }}>
-                          <img
-                            src={t1Data.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(match.team1?.name || "T1")}&background=252A30&color=6FAF3A`}
-                            alt={match.team1?.name}
-                            style={{ width: "48px", height: "48px", borderRadius: "var(--radius-md)", objectFit: "cover", border: "1px solid var(--border-light)", flexShrink: 0 }}
-                          />
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                              <strong style={{ fontSize: "0.95rem", wordBreak: "break-word", lineHeight: 1.3 }}>{match.team1?.name}</strong>
-                              {t1Data.tag && (
-                                <code style={{ fontSize: "0.7rem", color: "var(--primary)", background: "rgba(0,0,0,0.3)", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
-                                  [{t1Data.tag}]
-                                </code>
-                              )}
-                            </div>
-                            <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
-                              {t1Data.countries.length > 0 ? t1Data.countries.map((c: any) => (
-                                <span key={c.code} style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem" }} className="text-muted">
-                                  <img src={c.flag} alt={c.name} title={c.name} style={{ width: "14px", height: "10px", borderRadius: "2px", objectFit: "cover" }} />
-                                  {c.name}
-                                </span>
-                              )) : <span className="text-muted" style={{ fontSize: "0.7rem" }}>País no asignado</span>}
-                            </div>
-                            <div className="text-muted" style={{ fontSize: "0.7rem", marginTop: "0.35rem" }}>
-                              👥 {t1Players.length} • ⏱️ Prom: {t1AvgHours.toLocaleString()}h
-                            </div>
-                          </div>
-                          {(match.score1 !== null || match.is_completed) && (
-                            <div style={{ fontSize: "1.75rem", fontWeight: "bold", fontFamily: "monospace", padding: "0 0.5rem" }}>{match.score1 ?? 0}</div>
-                          )}
-                        </div>
-
-                        {/* VS */}
-                        <div style={{ textAlign: "center", flexShrink: 0 }}>
-                          <div style={{ width: "36px", height: "36px", borderRadius: "var(--radius-md)", background: "rgba(0,0,0,0.4)", border: "1px solid var(--border-light)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 auto" }}>
-                            VS
-                          </div>
-                          {Array.isArray(match.selected_maps) && match.selected_maps.length > 0 && (
-                            <div style={{ fontSize: "0.7rem", color: "var(--primary)", fontWeight: "bold", marginTop: "0.35rem" }} title={match.selected_maps.join(", ")}>
-                              🗺️ {match.selected_maps.length} mapa(s)
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Team 2 */}
-                        <div style={{ flex: "1 1 280px", display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem", borderRadius: "var(--radius-md)", background: "rgba(0,0,0,0.2)", border: "1px solid var(--border-light)" }}>
-                          {(match.score2 !== null || match.is_completed) && (
-                            <div style={{ fontSize: "1.75rem", fontWeight: "bold", fontFamily: "monospace", padding: "0 0.5rem" }}>{match.score2 ?? 0}</div>
-                          )}
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                              <strong style={{ fontSize: "0.95rem", wordBreak: "break-word", lineHeight: 1.3 }}>{match.team2?.name}</strong>
-                              {t2Data.tag && (
-                                <code style={{ fontSize: "0.7rem", color: "var(--primary)", background: "rgba(0,0,0,0.3)", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
-                                  [{t2Data.tag}]
-                                </code>
-                              )}
-                            </div>
-                            <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
-                              {t2Data.countries.length > 0 ? t2Data.countries.map((c: any) => (
-                                <span key={c.code} style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem" }} className="text-muted">
-                                  <img src={c.flag} alt={c.name} title={c.name} style={{ width: "14px", height: "10px", borderRadius: "2px", objectFit: "cover" }} />
-                                  {c.name}
-                                </span>
-                              )) : <span className="text-muted" style={{ fontSize: "0.7rem" }}>País no asignado</span>}
-                            </div>
-                            <div className="text-muted" style={{ fontSize: "0.7rem", marginTop: "0.35rem" }}>
-                              👥 {t2Players.length} • ⏱️ Prom: {t2AvgHours.toLocaleString()}h
-                            </div>
-                          </div>
-                          <img
-                            src={t2Data.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(match.team2?.name || "T2")}&background=252A30&color=6FAF3A`}
-                            alt={match.team2?.name}
-                            style={{ width: "48px", height: "48px", borderRadius: "var(--radius-md)", objectFit: "cover", border: "1px solid var(--border-light)", flexShrink: 0 }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Stream Link Banner */}
-                      {assignedCasterObj?.stream_url && (
-                        <div
-                          style={{
-                            marginTop: "1rem",
-                            padding: "0.75rem 1rem",
-                            borderRadius: "var(--radius-md)",
-                            background:
-                              streamPlatform === "kick"
-                                ? "rgba(83, 252, 24, 0.1)"
-                                : streamPlatform === "youtube"
-                                ? "rgba(239, 68, 68, 0.1)"
-                                : "rgba(145, 70, 255, 0.1)",
-                            border:
-                              streamPlatform === "kick"
-                                ? "1px solid rgba(83, 252, 24, 0.3)"
-                                : streamPlatform === "youtube"
-                                ? "1px solid rgba(239, 68, 68, 0.3)"
-                                : "1px solid rgba(145, 70, 255, 0.3)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            flexWrap: "wrap",
-                            gap: "0.5rem",
-                            fontSize: "0.8rem",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.5rem",
-                              color:
-                                streamPlatform === "kick"
-                                  ? "#53FC18"
-                                  : streamPlatform === "youtube"
-                                  ? "#f87171"
-                                  : "#bf94ff",
-                            }}
-                          >
-                            {streamPlatform === "twitch" ? (
-                              <TwitchIcon size={14} />
-                            ) : streamPlatform === "kick" ? (
-                              <KickIcon size={14} />
-                            ) : streamPlatform === "youtube" ? (
-                              <YoutubeIcon size={14} />
-                            ) : (
-                              <Radio size={14} />
-                            )}
-                            <span className="text-muted">
-                              Canal ({streamPlatform === "kick" ? "Kick" : streamPlatform === "youtube" ? "YouTube" : "Twitch"}):
-                            </span>
-                            <a
-                              href={assignedCasterObj.stream_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                fontWeight: "bold",
-                                color: "#fff",
-                                textDecoration: "underline",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.25rem",
-                              }}
-                            >
-                              {assignedCasterObj.stream_url}
-                              <ExternalLink size={10} style={{ opacity: 0.7 }} />
-                            </a>
-                          </div>
-                          <button
-                            onClick={() => openStreamManager(match)}
-                            id={`edit-stream-link-btn-${match.id}`}
-                            className="btn btn-secondary text-sm"
-                            style={{ padding: "0.35rem 0.75rem", fontSize: "0.75rem" }}
-                          >
-                            Modificar
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Caster Tools */}
-                      <div
-                        style={{
-                          marginTop: "1.25rem",
-                          paddingTop: "1rem",
-                          borderTop: "1px solid var(--border-light)",
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "0.75rem",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                          <button onClick={() => toggleRoster(match.id)} id={`toggle-roster-accordion-${match.id}`} className="btn btn-secondary" style={{ fontSize: "0.8rem", padding: "0.45rem 0.75rem" }}>
-                            <Users size={14} />
-                            {isExpanded ? "Ocultar Rosters" : "Ver Rosters"}
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          </button>
-                          <button onClick={() => handleCopyLineup(match)} id={`copy-stream-lineup-${match.id}`} className="btn btn-secondary" style={{ fontSize: "0.8rem", padding: "0.45rem 0.75rem", color: "var(--primary)" }}>
-                            {copiedMatchId === match.id ? <Check size={14} /> : <Copy size={14} />}
-                            {copiedMatchId === match.id ? "¡Copiado!" : "Copiar Ficha OBS"}
-                          </button>
-                          {match.map_veto_id && (
-                            <Link href={`/map-veto?vetoId=${match.map_veto_id}`} id={`open-map-veto-${match.id}`} className="btn btn-secondary" style={{ fontSize: "0.8rem", padding: "0.45rem 0.75rem", color: "#60a5fa" }}>
-                              <MapPin size={14} /> Map Veto
-                            </Link>
-                          )}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <button onClick={() => openStreamManager(match)} id={`manage-stream-action-${match.id}`} className="btn btn-primary" style={{ fontSize: "0.8rem", padding: "0.45rem 0.75rem" }}>
-                            <Play size={14} /> Gestionar Stream
-                          </button>
-                          <button
-                            onClick={() => setUnassignModal({ isOpen: true, matchId: match.id, isSubmitting: false })}
-                            id={`unassign-caster-action-${match.id}`}
-                            title="Desvincularme"
-                            className="btn btn-danger"
-                            style={{ padding: "0.45rem 0.6rem" }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Expanded Rosters Accordion */}
-                    {isExpanded && (
-                      <div className="animate-fadeIn" style={{ borderTop: "1px solid var(--border-light)", background: "rgba(0,0,0,0.2)", padding: "1.25rem 1.5rem" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
-                          <h4 style={{ margin: 0, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <Users size={16} color="var(--primary)" /> Alineaciones & Países
-                          </h4>
-                          <span className="text-muted text-xs">Datos para overlays y narración en vivo</span>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1rem" }}>
-                          {/* Team 1 Roster */}
-                          <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", padding: "1rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "0.75rem", borderBottom: "1px solid var(--border-light)", marginBottom: "0.75rem" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                <strong style={{ fontSize: "0.85rem" }}>{match.team1?.name}</strong>
-                                {t1Data.countries.map((c: any) => (
-                                  <img key={c.code} src={c.flag} alt={c.name} title={c.name} style={{ width: "14px", height: "10px", borderRadius: "2px" }} />
-                                ))}
-                              </div>
-                              <span className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>Prom: {t1AvgHours}h</span>
-                            </div>
-                            {t1Players.length === 0 ? (
-                              <p className="text-muted text-xs" style={{ textAlign: "center", padding: "0.75rem 0" }}>Sin jugadores registrados.</p>
-                            ) : (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                                {t1Players.map((player: any, idx: number) => {
-                                  const roleTitle = parsePlayerRoleTitle(player.role);
-                                  const banInfo = communityBans[player.steam_id_64];
-                                  const isCaptain = roleTitle.toLowerCase().includes("captain") || roleTitle.toLowerCase().includes("capit");
-                                  return (
-                                    <div key={player.id || idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.4rem 0.5rem", borderRadius: "var(--radius-md)", background: "rgba(255,255,255,0.03)", fontSize: "0.75rem" }}>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0 }}>
-                                        <span className="text-muted" style={{ fontFamily: "monospace", width: "18px" }}>{idx + 1}.</span>
-                                        {t1Data.countries[0]?.flag && <img src={t1Data.countries[0].flag} alt="País" style={{ width: "12px", height: "9px", borderRadius: "2px" }} />}
-                                        <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "130px" }}>{player.name}</strong>
-                                        {isCaptain ? (
-                                          <span className="badge" style={{ background: "rgba(250,204,21,0.2)", color: "#facc15", border: "1px solid rgba(250,204,21,0.3)", fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}>
-                                            👑 {roleTitle}
-                                          </span>
-                                        ) : (
-                                          <span className="text-muted" style={{ fontSize: "0.65rem", background: "rgba(0,0,0,0.3)", padding: "0.1rem 0.35rem", borderRadius: "3px" }}>{roleTitle}</span>
-                                        )}
-                                      </div>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-                                        <span className="text-muted" style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
-                                          {player.l4d2_playtime_hours ? `${player.l4d2_playtime_hours}h` : "Privado"}
-                                        </span>
-                                        {banInfo?.CommunityBanned ? (
-                                          <span className="badge" style={{ background: "rgba(239,68,68,0.2)", color: "#f87171", fontSize: "0.65rem", padding: "0.1rem 0.3rem" }}>BAN</span>
-                                        ) : (
-                                          <span style={{ color: "var(--primary)", fontSize: "0.65rem", fontWeight: "bold" }}>✓</span>
-                                        )}
-                                        {player.steam_id_64 && (
-                                          <a href={`https://steamcommunity.com/profiles/${player.steam_id_64}`} target="_blank" rel="noreferrer" className="btn-icon" style={{ padding: "0.15rem" }}>
-                                            <SteamIcon size={11} />
-                                          </a>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Team 2 Roster */}
-                          <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", padding: "1rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "0.75rem", borderBottom: "1px solid var(--border-light)", marginBottom: "0.75rem" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                <strong style={{ fontSize: "0.85rem" }}>{match.team2?.name}</strong>
-                                {t2Data.countries.map((c: any) => (
-                                  <img key={c.code} src={c.flag} alt={c.name} title={c.name} style={{ width: "14px", height: "10px", borderRadius: "2px" }} />
-                                ))}
-                              </div>
-                              <span className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>Prom: {t2AvgHours}h</span>
-                            </div>
-                            {t2Players.length === 0 ? (
-                              <p className="text-muted text-xs" style={{ textAlign: "center", padding: "0.75rem 0" }}>Sin jugadores registrados.</p>
-                            ) : (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                                {t2Players.map((player: any, idx: number) => {
-                                  const roleTitle = parsePlayerRoleTitle(player.role);
-                                  const banInfo = communityBans[player.steam_id_64];
-                                  const isCaptain = roleTitle.toLowerCase().includes("captain") || roleTitle.toLowerCase().includes("capit");
-                                  return (
-                                    <div key={player.id || idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.4rem 0.5rem", borderRadius: "var(--radius-md)", background: "rgba(255,255,255,0.03)", fontSize: "0.75rem" }}>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0 }}>
-                                        <span className="text-muted" style={{ fontFamily: "monospace", width: "18px" }}>{idx + 1}.</span>
-                                        {t2Data.countries[0]?.flag && <img src={t2Data.countries[0].flag} alt="País" style={{ width: "12px", height: "9px", borderRadius: "2px" }} />}
-                                        <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "130px" }}>{player.name}</strong>
-                                        {isCaptain ? (
-                                          <span className="badge" style={{ background: "rgba(250,204,21,0.2)", color: "#facc15", border: "1px solid rgba(250,204,21,0.3)", fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}>
-                                            👑 {roleTitle}
-                                          </span>
-                                        ) : (
-                                          <span className="text-muted" style={{ fontSize: "0.65rem", background: "rgba(0,0,0,0.3)", padding: "0.1rem 0.35rem", borderRadius: "3px" }}>{roleTitle}</span>
-                                        )}
-                                      </div>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-                                        <span className="text-muted" style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
-                                          {player.l4d2_playtime_hours ? `${player.l4d2_playtime_hours}h` : "Privado"}
-                                        </span>
-                                        {banInfo?.CommunityBanned ? (
-                                          <span className="badge" style={{ background: "rgba(239,68,68,0.2)", color: "#f87171", fontSize: "0.65rem", padding: "0.1rem 0.3rem" }}>BAN</span>
-                                        ) : (
-                                          <span style={{ color: "var(--primary)", fontSize: "0.65rem", fontWeight: "bold" }}>✓</span>
-                                        )}
-                                        {player.steam_id_64 && (
-                                          <a href={`https://steamcommunity.com/profiles/${player.steam_id_64}`} target="_blank" rel="noreferrer" className="btn-icon" style={{ padding: "0.15rem" }}>
-                                            <SteamIcon size={11} />
-                                          </a>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {myMatches.map((match) => (
+                <CasterMatchCard
+                  key={match.id}
+                  match={match}
+                  currentUserId={currentUserId}
+                  currentCasterId={currentCasterId}
+                  isExpanded={!!expandedRosters[match.id]}
+                  onToggleRoster={toggleRoster}
+                  onCopyLineup={handleCopyLineup}
+                  isCopied={copiedMatchId === match.id}
+                  onOpenStreamManager={openStreamManager}
+                  onUnassign={(matchId: string) => setUnassignModal({ isOpen: true, matchId, isSubmitting: false })}
+                  onPauseStream={(matchId: string) => handleSetMatchStatus(matchId, "pending")}
+                  onStartStream={(matchId: string) => handleSetMatchStatus(matchId, "in_progress")}
+                  onFinalizeMatch={handleOpenFinalizeMatch}
+                  onChooseMaps={handleOpenChooseMapModal}
+                  onGenerateVeto={handleGenerateVeto}
+                  communityBans={communityBans}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -1591,21 +1384,21 @@ ${t2Roster || "  • Sin jugadores registrados"}
               <Swords size={20} color="#60a5fa" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: "1rem" }}>Partidas Disponibles para Transmitir</h3>
+              <h3 style={{ margin: 0, fontSize: "1rem" }}>{t("caster.available_banner_title")}</h3>
               <p className="text-muted text-sm" style={{ margin: "0.25rem 0 0" }}>
-                Selecciona una partida y haz clic en &quot;Castear este Match&quot; para vincular tu canal oficial.
+                {t("caster.available_banner_desc")}
               </p>
             </div>
           </div>
 
           {isLoadingMatches && !cachedCasterDashboardData ? (
-            <LoadingSpinner text="Buscando matches disponibles..." />
+            <LoadingSpinner text={t("common.loading")} />
           ) : availableMatches.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: "4rem 2rem" }}>
               <CheckCircle2 size={40} color="var(--primary)" style={{ margin: "0 auto 1rem", display: "block" }} />
-              <h3 style={{ margin: "0 0 0.5rem" }}>¡Todos los matches tienen cobertura!</h3>
+              <h3 style={{ margin: "0 0 0.5rem" }}>{t("caster.all_covered_title")}</h3>
               <p className="text-muted text-sm" style={{ margin: 0 }}>
-                No hay partidos pendientes de caster en este momento. Las nuevas partidas aparecerán automáticamente.
+                {t("caster.all_covered_desc")}
               </p>
             </div>
           ) : (
@@ -1626,14 +1419,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         <span style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontWeight: "bold" }}>
                           <Trophy size={13} color="var(--primary)" /> {match.tournaments?.name || "Torneo"}
                         </span>
-                        {match.scheduled_at && (
-                          <span className="text-muted" style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                            <Calendar size={12} />
-                            {new Date(match.scheduled_at).toLocaleDateString("es-ES", {
-                              weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-                            })}
-                          </span>
-                        )}
+                        <MatchFormattedDate date={match.scheduled_at} />
                       </div>
 
                       {/* VS Card */}
@@ -1726,8 +1512,8 @@ ${t2Roster || "  • Sin jugadores registrados"}
                     <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border-light)", marginTop: "0.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
                       <span className="text-muted text-xs">
                         {match.assigned_casters?.length > 0
-                          ? `Transmitido por: ${match.assigned_casters[0].casters?.alias || "Caster oficial"}`
-                          : "Sin caster asignado"}
+                          ? `${t("caster.broadcasted_by", { caster: match.assigned_casters[0].casters?.alias || "Caster" })}`
+                          : t("caster.no_caster_assigned")}
                       </span>
                       <button
                         onClick={() => openStreamManager(match)}
@@ -1735,7 +1521,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         className="btn btn-primary"
                         style={{ fontSize: "0.8rem", padding: "0.45rem 0.75rem" }}
                       >
-                        <Radio size={13} /> Castear
+                        <Radio size={13} /> {t("caster.cast_this_match_btn")}
                       </button>
                     </div>
                   </div>
@@ -1754,14 +1540,14 @@ ${t2Roster || "  • Sin jugadores registrados"}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "1rem", borderBottom: "1px solid var(--border-light)", marginBottom: "1.5rem", flexWrap: "wrap", gap: "0.75rem" }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: "1.15rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <UserCheck size={20} color="var(--primary)" /> Perfil Público de Caster
+                  <UserCheck size={20} color="var(--primary)" /> {t("caster.public_profile_title")}
                 </h2>
                 <p className="text-muted text-xs" style={{ margin: "0.25rem 0 0" }}>
-                  Tu ficha oficial visible para espectadores y organizadores.
+                  {t("caster.public_profile_desc")}
                 </p>
               </div>
               <span className="badge" style={{ background: "var(--primary-glow)", color: "var(--primary)", border: "1px solid rgba(111, 175, 58, 0.3)" }}>
-                Aprobado ✓
+                {t("caster.approved_badge")}
               </span>
             </div>
 
@@ -1776,20 +1562,20 @@ ${t2Roster || "  • Sin jugadores registrados"}
                   alt="Avatar"
                   style={{ width: "80px", height: "80px", borderRadius: "var(--radius-lg)", objectFit: "cover", border: "2px solid var(--border-light)" }}
                 />
-                <div style={{ fontWeight: "bold", fontSize: "1rem", marginTop: "0.5rem" }}>{casterDisplayName}</div>
-                <div className="text-muted text-xs">{session?.user?.email}</div>
+                <div style={{ fontWeight: "bold", fontSize: "1rem", marginTop: "0.5rem" }} suppressHydrationWarning>{casterDisplayName}</div>
+                <div className="text-muted text-xs" suppressHydrationWarning>{session?.user?.email}</div>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 <div>
-                  <span className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.05em" }}>Biografía:</span>
+                  <span className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.05em" }}>{t("caster.bio_label")}:</span>
                   <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                    {caster?.bio || application?.bio || "Sin biografía ingresada aún."}
+                    {caster?.bio || application?.bio || t("caster.no_bio")}
                   </p>
                 </div>
 
                 <div>
-                  <span className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.05em" }}>Canales:</span>
+                  <span className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.05em" }}>{t("caster.channels_label")}:</span>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.35rem" }}>
                     {(caster?.twitch_channel || application?.twitch_channel) && (
                       <a
@@ -1828,7 +1614,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                 </div>
 
                 <div>
-                  <span className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.05em" }}>Idiomas:</span>
+                  <span className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.05em" }}>{t("caster.languages_label")}:</span>
                   <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.35rem" }}>
                     {normalizeLanguages(
                       caster?.languages || application?.languages || casterData?.languages || (casterData?.application as any)?.languages || (casterData?.caster as any)?.languages
@@ -1847,10 +1633,10 @@ ${t2Roster || "  • Sin jugadores registrados"}
           <div className="card">
             <div style={{ marginBottom: "1.5rem" }}>
               <h3 style={{ margin: 0, fontSize: "1.15rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Send size={18} color="#facc15" /> Solicitar Cambios en el Perfil
+                <Send size={18} color="#facc15" /> {t("caster.request_changes_title")}
               </h3>
               <p className="text-muted text-sm" style={{ margin: "0.25rem 0 0" }}>
-                Cualquier cambio es revisado por moderación para mantener la integridad en los torneos.
+                {t("caster.request_changes_desc")}
               </p>
             </div>
 
@@ -1873,9 +1659,9 @@ ${t2Roster || "  • Sin jugadores registrados"}
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
                   <Clock size={18} color="#facc15" style={{ flexShrink: 0, marginTop: "0.15rem" }} />
                   <div>
-                    <strong style={{ color: "#facc15" }}>Solicitud de edición en revisión</strong>
+                    <strong style={{ color: "#facc15" }}>{t("caster.pending_review_title")}</strong>
                     <div className="text-muted" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                      Tu perfil oficial actual sigue activo en torneos mientras moderación revisa los cambios propuestos.
+                      {t("caster.changes_pending_notice")}
                     </div>
                   </div>
                 </div>
@@ -1885,7 +1671,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                   className="btn btn-secondary"
                   style={{ fontSize: "0.75rem", padding: "0.4rem 0.85rem", whiteSpace: "nowrap" }}
                 >
-                  Cancelar Solicitud
+                  {t("common.cancel")}
                 </button>
               </div>
             )}
@@ -1921,7 +1707,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
               {/* Alias */}
               <div>
                 <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>
-                  Alias de Caster <span style={{ color: "var(--danger)" }}>*</span>
+                  {t("caster.caster_alias_label")} <span style={{ color: "var(--danger)" }}>*</span>
                 </label>
                 <input
                   type="text"
@@ -1937,12 +1723,12 @@ ${t2Roster || "  • Sin jugadores registrados"}
               {/* Bio */}
               <div>
                 <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>
-                  Biografía / Presentación
+                  {t("caster.caster_bio_label")}
                 </label>
                 <textarea
                   rows={3}
                   id="input-caster-bio"
-                  placeholder="Cuéntale a la comunidad sobre tu estilo de casteo..."
+                  placeholder={t("caster.bio_placeholder")}
                   value={editForm.bio}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, bio: e.target.value }))}
                   className="input-base"
@@ -1960,10 +1746,10 @@ ${t2Roster || "  • Sin jugadores registrados"}
                     </span>
                     {Boolean(casterData?.hasTwitchLinked || casterData?.verifiedTwitchChannel || caster?.twitch_channel || application?.twitch_channel) ? (
                       <span style={{ color: "#9146FF", fontSize: "0.7rem", fontWeight: "bold", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-                        <ShieldCheck size={13} /> Vinculado
+                        <ShieldCheck size={13} /> {t("settings.linked_badge")}
                       </span>
                     ) : (
-                      <span style={{ color: "var(--warning)", fontSize: "0.7rem" }}>No vinculada</span>
+                      <span style={{ color: "var(--warning)", fontSize: "0.7rem" }}>{t("common.none")}</span>
                     )}
                   </label>
 
@@ -1979,7 +1765,6 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         justifyContent: "space-between",
                         gap: "0.5rem",
                       }}
-                      title="Canal obtenido automáticamente de tu cuenta de Twitch vinculada"
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", overflow: "hidden" }}>
                         <TwitchIcon size={16} color="#9146FF" />
@@ -1988,7 +1773,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         </span>
                       </div>
                       <span style={{ fontSize: "0.7rem", color: "var(--muted)", fontStyle: "italic" }}>
-                        Bloqueado por vinculación
+                        {t("caster.locked_by_oauth")}
                       </span>
                     </div>
                   ) : (
@@ -2012,7 +1797,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         cursor: "pointer",
                       }}
                     >
-                      <TwitchIcon size={16} color="#9146FF" /> Vincular Cuenta de Twitch
+                      <TwitchIcon size={16} color="#9146FF" /> {t("settings.connect_twitch")}
                     </button>
                   )}
                 </div>
@@ -2025,10 +1810,10 @@ ${t2Roster || "  • Sin jugadores registrados"}
                     </span>
                     {Boolean(casterData?.hasKickLinked || casterData?.verifiedKickChannel || caster?.kick_channel || application?.kick_channel) ? (
                       <span style={{ color: "#53FC18", fontSize: "0.7rem", fontWeight: "bold", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-                        <ShieldCheck size={13} /> Vinculado
+                        <ShieldCheck size={13} /> {t("settings.linked_badge")}
                       </span>
                     ) : (
-                      <span style={{ color: "var(--warning)", fontSize: "0.7rem" }}>No vinculada</span>
+                      <span style={{ color: "var(--warning)", fontSize: "0.7rem" }}>{t("common.none")}</span>
                     )}
                   </label>
 
@@ -2044,7 +1829,6 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         justifyContent: "space-between",
                         gap: "0.5rem",
                       }}
-                      title="Canal obtenido automáticamente de tu cuenta de Kick vinculada"
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", overflow: "hidden" }}>
                         <KickIcon size={16} color="#53FC18" />
@@ -2053,7 +1837,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         </span>
                       </div>
                       <span style={{ fontSize: "0.7rem", color: "var(--muted)", fontStyle: "italic" }}>
-                        Bloqueado por vinculación
+                        {t("caster.locked_by_oauth")}
                       </span>
                     </div>
                   ) : (
@@ -2077,7 +1861,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                         cursor: "pointer",
                       }}
                     >
-                      <KickIcon size={16} color="#53FC18" /> Vincular Cuenta de Kick
+                      <KickIcon size={16} color="#53FC18" /> {t("settings.connect_kick")}
                     </button>
                   )}
                 </div>
@@ -2088,7 +1872,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                     <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                       <YoutubeIcon size={14} color="#FF0000" /> YouTube
                     </span>
-                    <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>Por URL o @handle</span>
+                    <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>Por URL / @handle</span>
                   </label>
                   <div style={{ position: "relative" }}>
                     <input
@@ -2111,7 +1895,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <div>
                   <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>
-                    Plataforma Principal
+                    {t("caster.primary_platform_label")}
                   </label>
                   <select
                     value={editForm.primary_platform}
@@ -2126,7 +1910,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                 </div>
                 <div>
                   <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>
-                    Idiomas de Casteo
+                    {t("caster.languages_label")}
                   </label>
                   <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", paddingTop: "0.4rem" }}>
                     {MAIN_CASTER_LANGUAGES.map((lang) => {
@@ -2219,9 +2003,9 @@ ${t2Roster || "  • Sin jugadores registrados"}
                   style={{ fontWeight: "bold" }}
                 >
                   {editForm.isSubmitting ? (
-                    <><RefreshCw size={16} className="animate-spin" /> Enviando...</>
+                    <><RefreshCw size={16} className="animate-spin" /> {t("common.loading")}</>
                   ) : (
-                    <><Send size={16} /> Enviar Solicitud</>
+                    <><Send size={16} /> {t("caster.submit_request_btn")}</>
                   )}
                 </button>
               </div>
@@ -2253,7 +2037,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "1rem", borderBottom: "1px solid var(--border-light)", marginBottom: "1rem" }}>
               <h3 style={{ margin: 0, fontSize: "1.15rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Play size={18} color="var(--primary)" /> Transmisión del Match
+                <Play size={18} color="var(--primary)" /> {t("caster.stream_modal_title")}
               </h3>
               <button
                 onClick={() => setStreamModal((prev) => ({ ...prev, isOpen: false }))}
@@ -2273,7 +2057,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <div>
                 <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
-                  Cuenta de Transmisión
+                  {t("matches.broadcast_account_label")}
                 </label>
 
                 {/* 1-Click Selectable Linked Accounts */}
@@ -2342,14 +2126,14 @@ ${t2Roster || "  • Sin jugadores registrados"}
                   </div>
                 ) : (
                   <p className="text-muted" style={{ fontSize: "0.75rem", marginBottom: "0.5rem" }}>
-                    No tienes canales configurados. Ingresa el enlace manualmente:
+                    {t("matches.no_caster_channels")}
                   </p>
                 )}
 
                 {/* Custom URL Input fallback */}
                 <details style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
                   <summary style={{ cursor: "pointer", marginBottom: "0.4rem", userSelect: "none" }}>
-                    {userLinkedAccounts.length > 0 ? "O ingresar un enlace personalizado..." : "Enlace personalizado"}
+                    {userLinkedAccounts.length > 0 ? t("matches.custom_url_link_label") : t("matches.custom_url_input_label")}
                   </summary>
                   <input
                     type="text"
@@ -2385,10 +2169,10 @@ ${t2Roster || "  • Sin jugadores registrados"}
                 />
                 <div>
                   <div style={{ fontWeight: "bold", display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                    <Radio size={13} color="#ef4444" /> Marcar como EN VIVO
+                    <Radio size={13} color="#ef4444" /> {t("matches.start_stream_now_checkbox")}
                   </div>
                   <p className="text-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.7rem" }}>
-                    El partido cambiará a estado En Vivo en el bracket.
+                    {t("matches.start_stream_now_hint")}
                   </p>
                 </div>
               </label>
@@ -2399,7 +2183,7 @@ ${t2Roster || "  • Sin jugadores registrados"}
                   id="btn-cancel-stream"
                   className="btn btn-secondary"
                 >
-                  Cancelar
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={handleSaveStream}
@@ -2409,9 +2193,9 @@ ${t2Roster || "  • Sin jugadores registrados"}
                   style={{ fontWeight: "bold" }}
                 >
                   {streamModal.isSubmitting ? (
-                    <><RefreshCw size={14} className="animate-spin" /> Guardando...</>
+                    <><RefreshCw size={14} className="animate-spin" /> {t("common.saving")}</>
                   ) : (
-                    <><Check size={14} /> Guardar</>
+                    <><Check size={14} /> {t("common.save")}</>
                   )}
                 </button>
               </div>
@@ -2423,14 +2207,37 @@ ${t2Roster || "  • Sin jugadores registrados"}
       {/* ─── CONFIRM MODAL: DESVINCULAR ─────────────────────── */}
       <ConfirmModal
         isOpen={unassignModal.isOpen}
-        title="Desvincularme del Match"
-        message="¿Estás seguro de que deseas desvincularte de la transmisión de este partido? El match volverá a quedar disponible para otros casters."
-        confirmText="Sí, Desvincularme"
-        cancelText="Cancelar"
+        title={t("caster.unassign_modal_title")}
+        message={t("caster.unassign_modal_desc")}
+        confirmText={t("caster.unassign_confirm_btn")}
+        cancelText={t("common.cancel")}
         isDanger={true}
         onConfirm={handleExecuteUnassign}
         onCancel={() => setUnassignModal({ isOpen: false, matchId: null, isSubmitting: false })}
       />
+
+      {/* ─── SCORE MODAL: FINALIZAR / REPORTAR RESULTADO ─────── */}
+      {scoreModal.isOpen && scoreModal.match && (
+        <ScoreModal
+          match={scoreModal.match}
+          team1={scoreModal.team1}
+          team2={scoreModal.team2}
+          onClose={() => setScoreModal({ isOpen: false, match: null, team1: null, team2: null, isSaving: false })}
+          onSave={handleSaveScore}
+          isSaving={scoreModal.isSaving}
+        />
+      )}
+
+      {/* ─── CHOOSE MAP MODAL: ELEGIR MAPAS ─────────────────── */}
+      {chooseMapModal.isOpen && chooseMapModal.match && (
+        <ChooseMapModal
+          isOpen={chooseMapModal.isOpen}
+          match={chooseMapModal.match}
+          onClose={() => setChooseMapModal({ isOpen: false, match: null, isSaving: false })}
+          onSave={handleSaveChosenMaps}
+          isSaving={chooseMapModal.isSaving}
+        />
+      )}
     </div>
   );
 }

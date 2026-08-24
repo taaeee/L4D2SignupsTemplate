@@ -137,6 +137,7 @@ const DockIcon = ({
   return (
     <motion.div
       ref={ref}
+      suppressHydrationWarning
       style={{ width: roundedSize, height: roundedSize, padding }}
       className={cn(
         "flex aspect-square cursor-pointer items-center justify-center rounded-full antialiased [backface-visibility:hidden]",

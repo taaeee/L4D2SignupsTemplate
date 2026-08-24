@@ -12,3 +12,9 @@ NEVER use native browser dialogs like `alert()`, `confirm()`, or `prompt()`. The
 
 ## Hover Effects and DOM Mutations
 NEVER mutate the DOM directly for hover effects (e.g., using `onMouseEnter={e => e.currentTarget.style.transform = ...}`). This desyncs the real DOM from React's Virtual DOM, causing "stuck" styles when the component re-renders or when the mouse leaves after the component's state changes (preventing `onMouseLeave` from cleaning up). ALWAYS use CSS `:hover` pseudo-classes or React state (e.g., `const [hoveredId, setHoveredId] = useState(null)`) to handle interactive styles.
+
+## Emojis
+NEVER use emojis, use svg instead.
+
+## Traduction
+.

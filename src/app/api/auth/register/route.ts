@@ -1,9 +1,25 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import bcrypt from "bcryptjs";
+import { rateLimit, getClientIp, rateLimitExceededResponse } from "@/lib/rate-limit";
+
+// Rate limiter: 5 registration requests per 15 minutes per IP
+const registerLimiter = rateLimit({
+  interval: 15 * 60 * 1000,
+});
 
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request);
+    const { success, reset } = registerLimiter.check(5, `register_${ip}`);
+    if (!success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+      return rateLimitExceededResponse(
+        "Demasiados intentos de registro desde esta conexión. Por favor, intenta de nuevo en unos minutos.",
+        retryAfterSeconds
+      );
+    }
+
     const body = await request.json();
     const { name, email, password } = body;
 

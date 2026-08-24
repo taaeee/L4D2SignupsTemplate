@@ -1,7 +1,23 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import JSZip from "jszip";
+import { rateLimit, getClientIp, rateLimitExceededResponse } from "@/lib/rate-limit";
+
+// Rate limiter: 10 export zip requests per minute per IP
+const exportLimiter = rateLimit({
+  interval: 60 * 1000,
+});
 
 export async function GET(request: Request, { params }: { params: any }) {
+  const ip = getClientIp(request);
+  const { success, reset } = exportLimiter.check(10, `export_logos_${ip}`);
+  if (!success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+    return rateLimitExceededResponse(
+      "Demasiadas descargas consecutivas. Por favor, espera un momento antes de reintentar.",
+      retryAfterSeconds
+    );
+  }
+
   const { id } = await params;
 
   try {
@@ -84,6 +100,6 @@ export async function GET(request: Request, { params }: { params: any }) {
 
   } catch (error: any) {
     console.error("Export Logos API Error:", error);
-    return new Response("Internal Server Error: " + error.message, { status: 500 });
+    return new Response("Error interno al procesar la exportación de logos.", { status: 500 });
   }
 }

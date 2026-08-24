@@ -3,6 +3,12 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/lib/authOptions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import bcrypt from "bcryptjs";
+import { rateLimit, getClientIp, rateLimitExceededResponse } from "@/lib/rate-limit";
+
+// Rate limiter: 5 password changes per 15 minutes per user/IP
+const changePasswordLimiter = rateLimit({
+  interval: 15 * 60 * 1000,
+});
 
 export async function POST(request: Request) {
   try {
@@ -11,7 +17,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    const ip = getClientIp(request);
     const userId = session.user.id;
+    const { success, reset } = changePasswordLimiter.check(5, `change_pwd_${userId}_${ip}`);
+    if (!success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+      return rateLimitExceededResponse(
+        "Demasiados intentos de cambio de contraseña. Por favor, intenta de nuevo en unos minutos.",
+        retryAfterSeconds
+      );
+    }
     const body = await request.json();
     const { currentPassword, newPassword, confirmPassword } = body;
 

@@ -5,11 +5,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Lock, KeyRound, CheckCircle2 } from "lucide-react";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { toast } from "sonner";
+import { useTranslation } from "@/lib/i18n";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const token = searchParams.get("token") || "";
   const email = searchParams.get("email") || "";
@@ -23,12 +26,12 @@ function ResetPasswordForm() {
   if (!token || !email) {
     return (
       <div className="reset-card card" style={{ textAlign: "center" }}>
-        <h2 style={{ color: "#ef4444", marginBottom: "1rem" }}>Enlace Inválido</h2>
+        <h2 style={{ color: "#ef4444", marginBottom: "1rem" }}>{t("auth.invalid_link_title")}</h2>
         <p className="text-muted">
-          El enlace de recuperación es incompleto o no es válido. Por favor solicita uno nuevo desde la página de inicio de sesión.
+          {t("auth.invalid_link_desc")}
         </p>
         <Link href="/login" className="btn btn-primary" style={{ marginTop: "1.5rem", display: "inline-block" }}>
-          Volver a Iniciar Sesión
+          {t("common.back_to_login")}
         </Link>
       </div>
     );
@@ -39,7 +42,7 @@ function ResetPasswordForm() {
     setErrorMsg(null);
 
     if (newPassword !== confirmPassword) {
-      const msg = "Las contraseñas no coinciden.";
+      const msg = t("auth.passwords_dont_match");
       setErrorMsg(msg);
       toast.error(msg);
       return;
@@ -62,18 +65,18 @@ function ResetPasswordForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        const msg = data.error || "Ocurrió un error al restablecer la contraseña.";
+        const msg = data.error || t("common.error_network");
         setErrorMsg(msg);
         toast.error(msg);
       } else {
         setSuccess(true);
-        toast.success("¡Tu contraseña ha sido restablecida con éxito!");
+        toast.success(t("auth.reset_success_desc"));
         setTimeout(() => {
           router.push("/login");
         }, 2500);
       }
     } catch (err) {
-      toast.error("Error al conectar con el servidor.");
+      toast.error(t("common.error_network"));
     } finally {
       setLoading(false);
     }
@@ -83,12 +86,12 @@ function ResetPasswordForm() {
     return (
       <div className="reset-card card" style={{ textAlign: "center", padding: "3rem 2rem" }}>
         <CheckCircle2 size={56} style={{ color: "#22c55e", margin: "0 auto 1rem" }} />
-        <h2 style={{ marginBottom: "0.5rem" }}>¡Contraseña Restablecida!</h2>
+        <h2 style={{ marginBottom: "0.5rem" }}>{t("auth.reset_success_title")}</h2>
         <p className="text-muted" style={{ marginBottom: "1.5rem" }}>
-          Tu contraseña ha sido actualizada correctamente. Redirigiendo al inicio de sesión...
+          {t("auth.reset_success_desc")}
         </p>
         <Link href="/login" className="btn btn-primary">
-          Ir al Inicio de Sesión
+          {t("common.back_to_login")}
         </Link>
       </div>
     );
@@ -98,10 +101,10 @@ function ResetPasswordForm() {
     <div className="reset-card card">
       <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.75rem", marginBottom: "0.5rem" }}>
-          Restablecer <span className="text-gradient">Contraseña</span>
+          {t("auth.reset_title")} <span className="text-gradient">{t("auth.reset_title_highlight")}</span>
         </h1>
         <p className="text-muted" style={{ fontSize: "0.9rem" }}>
-          Ingresa tu nueva contraseña para <strong>{email}</strong>
+          {t("auth.reset_for")} <strong>{email}</strong>
         </p>
       </div>
 
@@ -112,7 +115,7 @@ function ResetPasswordForm() {
           <Lock size={18} className="input-icon" />
           <input
             type="password"
-            placeholder="Nueva contraseña (mín. 8 caracteres)"
+            placeholder={t("auth.password_register_placeholder")}
             className="form-input"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
@@ -125,7 +128,7 @@ function ResetPasswordForm() {
           <KeyRound size={18} className="input-icon" />
           <input
             type="password"
-            placeholder="Confirmar nueva contraseña"
+            placeholder={t("auth.confirm_password_placeholder")}
             className="form-input"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
@@ -135,7 +138,7 @@ function ResetPasswordForm() {
         </div>
 
         <button type="submit" disabled={loading} className="btn btn-primary submit-btn">
-          {loading ? "Guardando..." : "Actualizar Contraseña"}
+          {loading ? t("common.saving") : t("auth.update_password")}
         </button>
       </form>
 
@@ -205,12 +208,13 @@ function ResetPasswordForm() {
 }
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation();
   return (
     <div
       className="container"
       style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}
     >
-      <header style={{ padding: "1.5rem 0" }}>
+      <header style={{ padding: "1.5rem 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Link
           href="/login"
           className="btn btn-secondary"
@@ -223,8 +227,9 @@ export default function ResetPasswordPage() {
             background: "transparent",
           }}
         >
-          <ArrowLeft size={18} /> Volver a Iniciar Sesión
+          <ArrowLeft size={18} /> {t("common.back_to_login")}
         </Link>
+        <LanguageSwitcher />
       </header>
 
       <main
@@ -235,7 +240,7 @@ export default function ResetPasswordPage() {
           justifyContent: "center",
         }}
       >
-        <Suspense fallback={<LoadingSpinner text="Cargando formulario..." />}>
+        <Suspense fallback={<LoadingSpinner />}>
           <ResetPasswordForm />
         </Suspense>
       </main>

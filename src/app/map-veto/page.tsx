@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { LinkIcon, Swords, ArrowRight, ShieldCheck, Check, Sparkles, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslation } from "@/lib/i18n";
 
 let cachedTournaments: any = null;
 let cachedMaps: any = null;
@@ -15,6 +16,7 @@ function MapVetoDashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useTranslation();
 
   // URL Query Params
   const queryMatchId = searchParams.get("matchId");
@@ -215,7 +217,7 @@ function MapVetoDashboardContent() {
       !selectedTeamB ||
       selectedTeamA === selectedTeamB
     ) {
-      toast.error("Selecciona un torneo y dos equipos diferentes.");
+      toast.error(t("map_veto.error_select_two_teams"));
       return;
     }
 
@@ -237,7 +239,7 @@ function MapVetoDashboardContent() {
         }));
 
       if (poolMaps.length === 0) {
-        toast.error("Debes seleccionar al menos un mapa para el pool.");
+        toast.error(t("map_veto.error_no_maps_in_pool"));
         return;
       }
 
@@ -274,7 +276,7 @@ function MapVetoDashboardContent() {
       }
 
       setGeneratedVeto(data);
-      toast.success("Veto creado exitosamente.");
+      toast.success(t("map_veto.veto_created_success"));
     } catch (e) {
       console.error("Veto creation error:", e);
       toast.error(
@@ -286,24 +288,24 @@ function MapVetoDashboardContent() {
   const copyLink = (path: string) => {
     const url = `${window.location.origin}${path}`;
     navigator.clipboard.writeText(url);
-    toast.success("¡Enlace copiado!");
+    toast.success(t("common.copied_to_clipboard"));
   };
 
   if (isLoading && (!cachedTournaments || !cachedMaps)) {
-    return <LoadingSpinner text="Cargando Veto de Mapas..." fullHeight={true} />;
+    return <LoadingSpinner fullHeight={true} />;
   }
 
-  const teamAName = teams.find((t) => t.id === selectedTeamA)?.name || "Equipo A";
-  const teamBName = teams.find((t) => t.id === selectedTeamB)?.name || "Equipo B";
+  const teamAName = teams.find((tItem) => tItem.id === selectedTeamA)?.name || "Equipo A";
+  const teamBName = teams.find((tItem) => tItem.id === selectedTeamB)?.name || "Equipo B";
 
   return (
     <div className="container" style={{ maxWidth: "900px", padding: "2rem 1rem" }}>
       <header style={{ textAlign: "center", marginBottom: "2rem" }}>
         <h1 style={{ fontSize: "2rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
-          <span className="text-gradient">Map Veto</span> Creator
+          <span className="text-gradient">Map Veto</span> {t("map_veto.creator_title")}
         </h1>
         <p className="text-muted text-sm" style={{ margin: 0 }}>
-          Genera una sesión interactiva de veto de mapas por turnos para dos equipos
+          {t("map_veto.creator_subtitle")}
         </p>
       </header>
 
@@ -344,13 +346,13 @@ function MapVetoDashboardContent() {
                   letterSpacing: "0.5px",
                 }}
               >
-                Partido Vinculado
+                {t("map_veto.linked_match")}
               </span>
               <h4 style={{ margin: 0, fontSize: "1rem" }}>
                 {teamAName} vs {teamBName}
               </h4>
               <p className="text-muted text-xs" style={{ margin: 0 }}>
-                Los mapas resultantes del veto se guardarán automáticamente en el horario del partido al finalizar.
+                {t("map_veto.linked_match_desc")}
               </p>
             </div>
           </div>
@@ -361,7 +363,7 @@ function MapVetoDashboardContent() {
             onClick={() => setLinkedMatchId(null)}
             style={{ padding: "0.3rem 0.6rem" }}
           >
-            Desvincular
+            {t("map_veto.unlink")}
           </button>
         </div>
       )}
@@ -371,7 +373,7 @@ function MapVetoDashboardContent() {
           {/* Tournament Selection */}
           <div className="form-group" style={{ marginBottom: "1.5rem" }}>
             <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
-              Torneo
+              {t("map_veto.select_tournament_label")}
             </label>
             <select
               className="input-base"
@@ -380,10 +382,10 @@ function MapVetoDashboardContent() {
               required
               style={{ width: "100%", padding: "0.6rem" }}
             >
-              <option value="">Selecciona un torneo...</option>
-              {tournaments.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
+              <option value="">{t("map_veto.select_tournament_placeholder")}</option>
+              {tournaments.map((tItem: any) => (
+                <option key={tItem.id} value={tItem.id}>
+                  {tItem.name}
                 </option>
               ))}
             </select>
@@ -393,7 +395,7 @@ function MapVetoDashboardContent() {
           <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
             <div className="form-group" style={{ flex: "1 1 250px" }}>
               <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
-                Equipo A (Inicia el veto)
+                {t("map_veto.team_a_label")}
               </label>
               <select
                 className="input-base"
@@ -403,10 +405,10 @@ function MapVetoDashboardContent() {
                 disabled={!selectedTournament || teams.length === 0}
                 style={{ width: "100%", padding: "0.6rem" }}
               >
-                <option value="">Selecciona equipo A...</option>
-                {teams.map((t: any) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+                <option value="">{t("map_veto.select_team_a")}</option>
+                {teams.map((tItem: any) => (
+                  <option key={tItem.id} value={tItem.id}>
+                    {tItem.name}
                   </option>
                 ))}
               </select>
@@ -414,7 +416,7 @@ function MapVetoDashboardContent() {
 
             <div className="form-group" style={{ flex: "1 1 250px" }}>
               <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
-                Equipo B (Segundo turno)
+                {t("map_veto.team_b_label")}
               </label>
               <select
                 className="input-base"
@@ -424,10 +426,10 @@ function MapVetoDashboardContent() {
                 disabled={!selectedTournament || teams.length === 0}
                 style={{ width: "100%", padding: "0.6rem" }}
               >
-                <option value="">Selecciona equipo B...</option>
-                {teams.map((t: any) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+                <option value="">{t("map_veto.select_team_b")}</option>
+                {teams.map((tItem: any) => (
+                  <option key={tItem.id} value={tItem.id}>
+                    {tItem.name}
                   </option>
                 ))}
               </select>
@@ -437,7 +439,7 @@ function MapVetoDashboardContent() {
           {/* Format Selection */}
           <div className="form-group" style={{ marginBottom: "2rem" }}>
             <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
-              Formato de Veto / Cantidad de Mapas
+              {t("map_veto.format_label")}
             </label>
             <select
               className="input-base"
@@ -445,10 +447,10 @@ function MapVetoDashboardContent() {
               onChange={(e) => setFormat(e.target.value)}
               style={{ width: "100%", padding: "0.6rem" }}
             >
-              <option value="bo1">Al Mejor de 1 (BO1 - 1 Mapa)</option>
-              <option value="to2">Al Mejor de 2 (TO2 - 2 Mapas)</option>
-              <option value="bo3">Al Mejor de 3 (BO3 - 3 Mapas)</option>
-              <option value="bo5">Al Mejor de 5 (BO5 - 5 Mapas)</option>
+              <option value="bo1">{t("map_veto.format_bo1")}</option>
+              <option value="to2">{t("map_veto.format_to2")}</option>
+              <option value="bo3">{t("map_veto.format_bo3")}</option>
+              <option value="bo5">{t("map_veto.format_bo5")}</option>
             </select>
           </div>
 
@@ -466,10 +468,10 @@ function MapVetoDashboardContent() {
             >
               <div>
                 <label style={{ margin: 0, fontWeight: "bold", fontSize: "0.95rem" }}>
-                  Map Pool ({selectedMaps.length} seleccionados)
+                  Map Pool ({selectedMaps.length} {t("map_veto.selected_maps_count")})
                 </label>
                 <p className="text-muted text-xs" style={{ margin: "0.2rem 0 0" }}>
-                  Elige los mapas que estarán disponibles para banear y elegir en esta sesión.
+                  {t("map_veto.map_pool_desc")}
                 </p>
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -488,14 +490,14 @@ function MapVetoDashboardContent() {
                     )
                   }
                 >
-                  Seleccionar Todos
+                  {t("map_veto.select_all")}
                 </button>
                 <button
                   type="button"
                   className="btn btn-secondary text-xs"
                   onClick={() => setSelectedMaps([])}
                 >
-                  Limpiar Pool
+                  {t("map_veto.clear_pool")}
                 </button>
               </div>
             </div>
@@ -514,7 +516,7 @@ function MapVetoDashboardContent() {
                 flexWrap: "wrap",
               }}
             >
-              <label style={{ margin: 0, fontSize: "0.85rem" }}>Generar Aleatorio:</label>
+              <label style={{ margin: 0, fontSize: "0.85rem" }}>{t("map_veto.generate_random")}:</label>
               <input
                 type="number"
                 className="input-base"
@@ -531,10 +533,10 @@ function MapVetoDashboardContent() {
                 className="btn btn-secondary text-xs"
                 onClick={handleRandomPool}
               >
-                Generar Pool
+                {t("map_veto.generate_pool_btn")}
               </button>
               <span className="text-xs text-muted" style={{ marginLeft: "auto" }}>
-                Total disponible: {allMaps.filter((map: any) => mapFilter === "all" || map.type === mapFilter).length} mapas
+                {t("map_veto.total_available")}: {allMaps.filter((map: any) => mapFilter === "all" || map.type === mapFilter).length} {t("map_veto.maps_unit")}
               </span>
             </div>
 
@@ -543,7 +545,7 @@ function MapVetoDashboardContent() {
               <input
                 type="text"
                 className="input-base"
-                placeholder="Buscar mapa..."
+                placeholder={t("map_veto.search_map_placeholder")}
                 value={searchMap}
                 onChange={(e) => setSearchMap(e.target.value)}
                 style={{ flex: "1 1 200px", padding: "0.5rem" }}
@@ -554,9 +556,9 @@ function MapVetoDashboardContent() {
                 onChange={(e) => setMapFilter(e.target.value)}
                 style={{ minWidth: "150px", padding: "0.5rem" }}
               >
-                <option value="all">Todos los tipos</option>
-                <option value="official">Oficiales</option>
-                <option value="custom">Customs</option>
+                <option value="all">{t("map_veto.filter_all")}</option>
+                <option value="official">{t("map_veto.filter_official")}</option>
+                <option value="custom">{t("map_veto.filter_custom")}</option>
               </select>
             </div>
 
@@ -565,7 +567,7 @@ function MapVetoDashboardContent() {
               {/* Available Maps Panel */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--primary)" }}>
-                  Mapas Disponibles (Haz clic para agregar)
+                  {t("map_veto.available_maps_header")}
                 </h4>
                 <div
                   style={{
@@ -618,7 +620,7 @@ function MapVetoDashboardContent() {
                     ))}
                   {allMaps.filter((map: any) => !selectedMaps.includes(map.name)).length === 0 && (
                     <p className="text-muted text-xs" style={{ gridColumn: "1 / -1", textAlign: "center", margin: "1rem 0" }}>
-                      Todos los mapas están seleccionados
+                      {t("map_veto.all_maps_selected")}
                     </p>
                   )}
                 </div>
@@ -627,7 +629,7 @@ function MapVetoDashboardContent() {
               {/* Selected Maps Panel */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--success)" }}>
-                  Pool Activo ({selectedMaps.length} mapas - Haz clic para quitar)
+                  {t("map_veto.active_pool_header")} ({selectedMaps.length} {t("map_veto.maps_unit")})
                 </h4>
                 <div
                   style={{
@@ -668,14 +670,14 @@ function MapVetoDashboardContent() {
                       }}
                       onMouseEnter={() => setHoveredSelectedMap(mapName)}
                       onMouseLeave={() => setHoveredSelectedMap(null)}
-                      title="Haz clic para quitar del pool"
+                      title={t("map_veto.click_to_remove")}
                     >
                       {hoveredSelectedMap === mapName ? `x ${mapName}` : mapName}
                     </button>
                   ))}
                   {selectedMaps.length === 0 && (
                     <p className="text-muted text-xs" style={{ gridColumn: "1 / -1", textAlign: "center", margin: "1rem 0" }}>
-                      No has seleccionado ningún mapa en el pool
+                      {t("map_veto.no_maps_in_pool")}
                     </p>
                   )}
                 </div>
@@ -697,7 +699,7 @@ function MapVetoDashboardContent() {
               gap: "0.5rem",
             }}
           >
-            <Sparkles size={20} /> Generar Enlaces de Veto
+            <Sparkles size={20} /> {t("map_veto.generate_veto_links_btn")}
           </button>
         </form>
       ) : (
@@ -718,15 +720,15 @@ function MapVetoDashboardContent() {
             >
               <Check size={28} color="var(--success)" />
             </div>
-            <h2 style={{ color: "var(--success)", margin: "0 0 0.5rem" }}>¡Veto Generado con Éxito!</h2>
+            <h2 style={{ color: "var(--success)", margin: "0 0 0.5rem" }}>{t("map_veto.veto_success_title")}</h2>
             <p className="text-muted text-sm" style={{ margin: 0 }}>
-              Comparte los enlaces correspondientes con los capitanes de cada equipo y con los espectadores.
+              {t("map_veto.veto_success_desc")}
             </p>
           </div>
 
           {/* Spectator Link */}
           <div style={{ background: "rgba(0,0,0,0.3)", padding: "1.25rem", borderRadius: "10px", border: "1px solid var(--border-light)" }}>
-            <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>Enlace para Espectadores y Casters</h4>
+            <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>{t("map_veto.spectator_link_title")}</h4>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <input
                 type="text"
@@ -741,7 +743,7 @@ function MapVetoDashboardContent() {
                 onClick={() => copyLink(`/map-veto/${generatedVeto.id}`)}
                 style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
               >
-                <LinkIcon size={14} /> Copiar
+                <LinkIcon size={14} /> {t("common.copy")}
               </button>
             </div>
           </div>
@@ -759,7 +761,7 @@ function MapVetoDashboardContent() {
             }}
           >
             <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem", color: "var(--primary)" }}>
-              Capitán de {teamAName} (Turno 1)
+              {t("map_veto.captain_of")} {teamAName} ({t("map_veto.turn")} 1)
             </h4>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <input
@@ -775,7 +777,7 @@ function MapVetoDashboardContent() {
                 onClick={() => copyLink(`/map-veto/${generatedVeto.id}?token=${generatedVeto.team_a_token}`)}
                 style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
               >
-                <LinkIcon size={14} /> Copiar
+                <LinkIcon size={14} /> {t("common.copy")}
               </button>
             </div>
           </div>
@@ -793,7 +795,7 @@ function MapVetoDashboardContent() {
             }}
           >
             <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem", color: "var(--warning)" }}>
-              Capitán de {teamBName} (Turno 2)
+              {t("map_veto.captain_of")} {teamBName} ({t("map_veto.turn")} 2)
             </h4>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <input
@@ -809,7 +811,7 @@ function MapVetoDashboardContent() {
                 onClick={() => copyLink(`/map-veto/${generatedVeto.id}?token=${generatedVeto.team_b_token}`)}
                 style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
               >
-                <LinkIcon size={14} /> Copiar
+                <LinkIcon size={14} /> {t("common.copy")}
               </button>
             </div>
           </div>
@@ -821,7 +823,7 @@ function MapVetoDashboardContent() {
               style={{ flex: 1 }}
               onClick={() => router.push(`/map-veto/${generatedVeto.id}`)}
             >
-              Ir a la Sala de Veto
+              {t("map_veto.go_to_veto_room")}
             </button>
             <button
               type="button"
@@ -829,7 +831,7 @@ function MapVetoDashboardContent() {
               style={{ flex: 1 }}
               onClick={() => setGeneratedVeto(null)}
             >
-              Crear Otro Veto
+              {t("map_veto.create_another_veto")}
             </button>
           </div>
         </div>
@@ -840,7 +842,7 @@ function MapVetoDashboardContent() {
 
 export default function MapVetoDashboard() {
   return (
-    <Suspense fallback={<LoadingSpinner text="Cargando Veto de Mapas..." fullHeight={true} />}>
+    <Suspense fallback={<LoadingSpinner fullHeight={true} />}>
       <MapVetoDashboardContent />
     </Suspense>
   );

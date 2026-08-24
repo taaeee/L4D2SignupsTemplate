@@ -106,12 +106,14 @@ export async function GET(request: Request) {
         // Determine if match actually has a finished result
         const hasScore =
           m.score1 !== null &&
+          m.score1 !== undefined &&
           m.score2 !== null &&
+          m.score2 !== undefined &&
           (m.score1 > 0 || m.score2 > 0);
 
         const isCompleted =
           hasScore ||
-          (m.status === "completed" && m.winner_id && (m.score1 > 0 || m.score2 > 0));
+          (m.status === "completed" && Boolean(m.winner_id));
 
         const isLive = m.status === "in_progress";
 

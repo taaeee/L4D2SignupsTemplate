@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import nodemailer from "nodemailer";
+import { rateLimit, getClientIp, rateLimitExceededResponse } from "@/lib/rate-limit";
+
+// Rate limiter: 5 password reset requests per 15 minutes per IP
+const resetLimiter = rateLimit({
+  interval: 15 * 60 * 1000,
+});
 
 async function sendResetEmail(toEmail: string, resetUrl: string) {
   const host = process.env.SMTP_HOST;
@@ -61,6 +67,16 @@ async function sendResetEmail(toEmail: string, resetUrl: string) {
 
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request);
+    const { success, reset } = resetLimiter.check(5, `reset_${ip}`);
+    if (!success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+      return rateLimitExceededResponse(
+        "Demasiadas solicitudes de recuperación de contraseña desde esta conexión. Por favor, intenta más tarde.",
+        retryAfterSeconds
+      );
+    }
+
     const body = await request.json();
     const { email } = body;
 

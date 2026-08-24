@@ -158,27 +158,43 @@ export async function POST(
       );
     }
 
-    // 1. Verify that user has the global Caster role
+    // 1. Fetch tournament details to check if user is organizer/moderator
+    const { data: tournament } = await supabaseAdmin
+      .from("tournaments")
+      .select("creator_id, moderators")
+      .eq("id", tournamentId)
+      .single();
+
+    const isCreator = session.user.id && tournament?.creator_id === session.user.id;
+    const isModerator =
+      session.user.id &&
+      Array.isArray(tournament?.moderators) &&
+      tournament.moderators.includes(session.user.id);
+    const isTournamentAdmin = isCreator || isModerator;
+
+    // 2. Check if user has global Caster role
     let { data: globalCaster } = await supabaseAdmin
       .from("casters")
       .select("*")
       .eq("user_id", session.user.id)
       .maybeSingle();
 
-    if (!globalCaster) {
+    if (!globalCaster && !isTournamentAdmin) {
       return NextResponse.json(
         {
-          error: "Debes ser un Caster Oficial registrado primero para poder postularte a un torneo. Postúlate primero desde Ajustes > Caster Oficial.",
+          error: "Debes ser un Caster Oficial registrado primero para poder postularte a otros torneos. Postúlate primero desde Ajustes > Caster Oficial.",
           requiresGlobalCaster: true,
         },
         { status: 403 }
       );
     }
 
-    // Enrich global caster with linked accounts
-    globalCaster = await enrichCasterProfile(globalCaster);
+    // Enrich global caster if present
+    if (globalCaster) {
+      globalCaster = await enrichCasterProfile(globalCaster);
+    }
 
-    // 2. Parse body or fallback to global caster profile data
+    // 3. Parse body or fallback to global caster profile data / linked accounts
     let body: any = {};
     try {
       body = await request.json();
@@ -189,16 +205,16 @@ export async function POST(
     // Also get any verified streaming channels
     const userChannels = await getUserStreamingChannels(session.user.id);
 
-    const alias = (body.alias?.trim() || globalCaster.alias || session.user.name || "Caster").trim();
-    let cleanTwitch = (body.twitch_channel?.trim() || globalCaster.twitch_channel || userChannels.twitch_channel || "").trim();
+    const alias = (body.alias?.trim() || globalCaster?.alias || session.user.name || "Caster").trim();
+    let cleanTwitch = (body.twitch_channel?.trim() || globalCaster?.twitch_channel || userChannels.twitch_channel || "").trim();
     if (cleanTwitch.startsWith("http://") || cleanTwitch.startsWith("https://")) {
       const parts = cleanTwitch.split("/").filter(Boolean);
       cleanTwitch = parts[parts.length - 1] || cleanTwitch;
     }
 
-    const kick = body.kick_channel !== undefined ? body.kick_channel?.trim() || null : globalCaster.kick_channel || userChannels.kick_channel || null;
-    const youtube = body.youtube_channel !== undefined ? body.youtube_channel?.trim() || null : globalCaster.youtube_channel || userChannels.youtube_channel || null;
-    const bio = body.bio !== undefined ? body.bio?.trim() || null : globalCaster.bio || null;
+    const kick = body.kick_channel !== undefined ? body.kick_channel?.trim() || null : globalCaster?.kick_channel || userChannels.kick_channel || null;
+    const youtube = body.youtube_channel !== undefined ? body.youtube_channel?.trim() || null : globalCaster?.youtube_channel || userChannels.youtube_channel || null;
+    const bio = body.bio !== undefined ? body.bio?.trim() || null : globalCaster?.bio || (isTournamentAdmin ? "Organizador y Caster Oficial del Torneo" : null);
     const languages = Array.isArray(body.languages) && body.languages.length > 0 ? body.languages : ["Español"];
 
     if (!alias || alias.length < 2) {
@@ -218,15 +234,8 @@ export async function POST(
     // Ensure user exists in public.users to avoid foreign key errors
     await ensurePublicUser(session.user.id, session.user);
 
-    // Check if user is tournament creator / moderator (auto-approve if creator)
-    const { data: tournament } = await supabaseAdmin
-      .from("tournaments")
-      .select("creator_id")
-      .eq("id", tournamentId)
-      .single();
-
-    const isCreator = tournament?.creator_id === session.user.id;
-    const initialStatus = isCreator ? "approved" : "pending";
+    // Initial status: Tournament organizers/moderators are immediately approved for their tournament!
+    const initialStatus = isTournamentAdmin ? "approved" : "pending";
 
     // Upsert tournament caster application
     const upsertData: any = {

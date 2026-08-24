@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from "react";
 import MatchCard from "./MatchCard";
-import { Trophy, RefreshCw } from "lucide-react";
+import { Trophy, RefreshCw, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "./ConfirmModal";
 import ScoreModal from "./ScoreModal";
+import { useTranslation } from "@/lib/i18n";
 
 interface Team {
   id: string;
@@ -34,6 +35,7 @@ interface SwissViewerProps {
 }
 
 export default function SwissViewer({ matches, teams, canManage, onMatchUpdated, tournament }: SwissViewerProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("matches"); // matches | standings
   const [isGenerating, setIsGenerating] = useState(false);
   const [showConfirmNextRound, setShowConfirmNextRound] = useState(false);
@@ -60,7 +62,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
     const { matchId: sourceMatchId, slot: sourceSlot } = draggedSlot;
     setDraggedSlot(null);
 
-    const toastId = toast.loading("Actualizando emparejamiento...");
+    const toastId = toast.loading(t("common.loading"));
 
     try {
       const res = await fetch(`/api/tournament/${tournament.id}/bracket/swap-slots`, {
@@ -79,7 +81,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
         throw new Error(data.error || "Error al actualizar enfrentamientos");
       }
 
-      toast.success("Emparejamientos actualizados", { id: toastId });
+      toast.success(data.message || "Emparejamientos actualizados", { id: toastId });
       onMatchUpdated();
     } catch (err: any) {
       console.error(err);
@@ -89,7 +91,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
   };
 
   const currentRound = tournament?.template_json?.currentSwissRound || 1;
-  const totalRounds = tournament?.template_json?.swissRounds || 1;
+  const maxRounds = tournament?.template_json?.swissRounds || 1;
 
   // Calculate Standings
   const standings = useMemo(() => {
@@ -166,7 +168,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
 
   const currentRoundMatches = matchesByRound[currentRound] || [];
   const allCurrentMatchesCompleted = currentRoundMatches.length > 0 && currentRoundMatches.every(m => m.status === 'completed');
-  const canGenerateNextRound = canManage && allCurrentMatchesCompleted && currentRound < totalRounds;
+  const canGenerateNextRound = canManage && allCurrentMatchesCompleted && currentRound < maxRounds;
 
   const teamMap = useMemo(() => {
     const map: Record<string, Team> = {};
@@ -176,7 +178,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
 
   const handleMatchClick = (match: Match, t1: Team | null, t2: Team | null) => {
     if (!match.team1_id || !match.team2_id) {
-      if (canManage) toast.info("Este partido no tiene a los dos equipos asignados aún.");
+      if (canManage) toast.info(t("modals.to_be_decided"));
       return;
     }
     if (match.status === 'completed' && !canManage) return;
@@ -199,7 +201,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
       
       if (!res.ok) throw new Error(result.error || 'Error al guardar');
       
-      toast.success("Resultado guardado correctamente.");
+      toast.success(t("modals.score_saved_success"));
       setSelectedMatch(null);
       if (onMatchUpdated) onMatchUpdated();
     } catch (e: any) {
@@ -219,7 +221,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      toast.success(`Ronda ${currentRound + 1} generada exitosamente.`);
+      toast.success(t("brackets.round_name", { num: currentRound + 1 }));
       onMatchUpdated(); // reload matches & tournament
     } catch (e: any) {
       toast.error(e.message || "Error al generar la siguiente ronda");
@@ -237,14 +239,14 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
             className={`tab-btn ${activeTab === "matches" ? "active" : ""}`}
             style={{ padding: "0.5rem 1.5rem" }}
           >
-            Partidos (Rondas)
+            {t("brackets.swiss_stage")}
           </button>
           <button
             onClick={() => setActiveTab("standings")}
             className={`tab-btn ${activeTab === "standings" ? "active" : ""}`}
             style={{ padding: "0.5rem 1.5rem" }}
           >
-            Clasificación (Standings)
+            {t("brackets.swiss_standings")}
           </button>
         </div>
 
@@ -256,7 +258,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
             style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
           >
             <RefreshCw size={18} />
-            {isGenerating ? "Generando..." : `Generar Ronda ${currentRound + 1}`}
+            {isGenerating ? t("tournament_detail.generating") : t("brackets.generate_round_btn", { num: currentRound + 1 })}
           </button>
         )}
       </div>
@@ -276,11 +278,11 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
             fontSize: '0.85rem',
           }}
         >
-          <span style={{ fontSize: '1.1rem' }}>🔀</span>
+          <Shuffle size={18} color="var(--primary)" />
           <div>
-            <strong style={{ color: 'var(--primary)' }}>Ajuste de emparejamientos activo:</strong>{' '}
+            <strong style={{ color: 'var(--primary)' }}>{t("brackets.dnd_active_title")}:</strong>{' '}
             <span className="text-muted">
-              Arrastra y suelta los equipos de la Ronda 1 para reorganizar los cruces iniciales antes de cerrar el torneo.
+              {t("brackets.dnd_active_desc")}
             </span>
           </div>
         </div>
@@ -292,7 +294,7 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
             {Object.keys(matchesByRound).sort((a,b) => parseInt(b) - parseInt(a)).map(roundKey => (
               <div key={roundKey}>
                 <h3 style={{ borderBottom: "1px solid var(--border)", paddingBottom: "0.5rem", marginBottom: "1rem", color: "var(--primary)" }}>
-                  Ronda {roundKey} {parseInt(roundKey) === currentRound ? "(Actual)" : ""}
+                  {t("brackets.round_name", { num: roundKey })} {parseInt(roundKey) === currentRound ? `(${t("brackets.current_round_badge")})` : ""}
                 </h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
                   {matchesByRound[roundKey].map(m => (
@@ -318,12 +320,12 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--muted)" }}>
-                  <th style={{ padding: "1rem" }}>#</th>
-                  <th style={{ padding: "1rem" }}>Equipo</th>
-                  <th style={{ padding: "1rem", textAlign: "center" }}>Victorias</th>
-                  <th style={{ padding: "1rem", textAlign: "center" }}>Derrotas</th>
-                  <th style={{ padding: "1rem", textAlign: "center" }} title="Suma de las victorias de los oponentes">Buchholz</th>
-                  <th style={{ padding: "1rem", textAlign: "center" }}>Estado</th>
+                  <th style={{ padding: "1rem" }}>{t("brackets.col_rank")}</th>
+                  <th style={{ padding: "1rem" }}>{t("brackets.col_team")}</th>
+                  <th style={{ padding: "1rem", textAlign: "center" }}>{t("brackets.col_wins")}</th>
+                  <th style={{ padding: "1rem", textAlign: "center" }}>{t("brackets.col_losses")}</th>
+                  <th style={{ padding: "1rem", textAlign: "center" }} title="Suma de las victorias de los oponentes">{t("brackets.col_buchholz")}</th>
+                  <th style={{ padding: "1rem", textAlign: "center" }}>{t("brackets.col_status")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -343,9 +345,9 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
                     <td style={{ padding: "1rem", textAlign: "center" }}>{s.buchholz}</td>
                     <td style={{ padding: "1rem", textAlign: "center" }}>
                       {s.active ? (
-                        <span style={{ color: "var(--success)", fontSize: "0.85rem", background: "rgba(34, 197, 94, 0.1)", padding: "0.2rem 0.5rem", borderRadius: "100px" }}>Activo</span>
+                        <span style={{ color: "var(--success)", fontSize: "0.85rem", background: "rgba(34, 197, 94, 0.1)", padding: "0.2rem 0.5rem", borderRadius: "100px" }}>{t("brackets.status_active")}</span>
                       ) : (
-                        <span style={{ color: "var(--danger)", fontSize: "0.85rem", background: "rgba(239, 68, 68, 0.1)", padding: "0.2rem 0.5rem", borderRadius: "100px" }}>Expulsado / Retirado</span>
+                        <span style={{ color: "var(--danger)", fontSize: "0.85rem", background: "rgba(239, 68, 68, 0.1)", padding: "0.2rem 0.5rem", borderRadius: "100px" }}>{t("brackets.status_expelled")}</span>
                       )}
                     </td>
                   </tr>
@@ -358,9 +360,10 @@ export default function SwissViewer({ matches, teams, canManage, onMatchUpdated,
 
       <ConfirmModal
         isOpen={showConfirmNextRound}
-        title={`Generar Ronda ${currentRound + 1}`}
+        title={t("brackets.generate_round_btn", { num: currentRound + 1 })}
         message="¿Estás seguro de generar los partidos para la siguiente ronda? El sistema emparejará automáticamente a los equipos según sus puntuaciones actuales (Sistema Suizo)."
         confirmText="Sí, Generar"
+        cancelText={t("common.cancel")}
         isDanger={false}
         onConfirm={handleGenerateNextRound}
         onCancel={() => setShowConfirmNextRound(false)}

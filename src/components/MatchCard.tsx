@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Trophy, GripVertical } from 'lucide-react';
 import { Database } from '@/lib/database.types';
+import { useTranslation } from '@/lib/i18n';
 
 interface Team {
   id: string;
@@ -37,6 +38,7 @@ export default function MatchCard({
   onSlotDragStart,
   onSlotDrop,
 }: MatchCardProps) {
+  const { t } = useTranslation();
   const [dragOverSlot, setDragOverSlot] = useState<1 | 2 | null>(null);
 
   const team1 = match.team1_id ? teamMap[match.team1_id] || null : null;
@@ -62,7 +64,7 @@ export default function MatchCard({
       if (teamObj.status === "eliminated") {
         statusBadge = (
           <span
-            title="Eliminado de la competencia"
+            title={t("team_detail.status_eliminated_badge")}
             style={{
               marginLeft: "6px",
               fontSize: "0.65rem",
@@ -75,13 +77,13 @@ export default function MatchCard({
               display: "inline-block",
             }}
           >
-            ELIMINADO
+            {t("team_detail.status_eliminated_badge")}
           </span>
         );
       } else if (teamObj.status === "disqualified") {
         statusBadge = (
           <span
-            title="Descalificado"
+            title={t("team_detail.status_disqualified_badge")}
             style={{
               marginLeft: "6px",
               fontSize: "0.65rem",
@@ -94,13 +96,13 @@ export default function MatchCard({
               display: "inline-block",
             }}
           >
-            DESCALIFICADO
+            {t("team_detail.status_disqualified_badge")}
           </span>
         );
       } else if (teamObj.status === "withdrawn") {
         statusBadge = (
           <span
-            title="Salida por cuenta propia / Retirado"
+            title={t("team_detail.status_withdrawn_badge")}
             style={{
               marginLeft: "6px",
               fontSize: "0.65rem",
@@ -113,7 +115,7 @@ export default function MatchCard({
               display: "inline-block",
             }}
           >
-            RETIRADO
+            {t("team_detail.status_withdrawn_badge")}
           </span>
         );
       }
@@ -151,25 +153,21 @@ export default function MatchCard({
     }
 
     // Show empty space instead of TBD for Challonge-style look
-    return <span style={{ opacity: 0.3, fontStyle: 'italic' }}>Esperando...</span>;
-  };
-
-  const handleMouseEnter = (teamId?: string | null) => {
-    if (!teamId) return;
-    document.querySelectorAll(`.team-slot-${teamId}`).forEach((el) => el.classList.add('hover-highlight'));
-    document.querySelectorAll(`.match-card-team-${teamId}`).forEach((el) => el.classList.add('hover-card-highlight'));
-  };
-
-  const handleMouseLeave = (teamId?: string | null) => {
-    if (!teamId) return;
-    document.querySelectorAll(`.team-slot-${teamId}`).forEach((el) => el.classList.remove('hover-highlight'));
-    document.querySelectorAll(`.match-card-team-${teamId}`).forEach((el) => el.classList.remove('hover-card-highlight'));
+    return <span style={{ opacity: 0.3, fontStyle: 'italic' }}>{t("brackets.waiting")}</span>;
   };
 
   return (
     <div
+      role={canManage && !isDndEnabled ? "button" : undefined}
+      tabIndex={canManage && !isDndEnabled ? 0 : undefined}
       onClick={() => {
         if (canManage && onClick && !isDndEnabled) {
+          onClick(match, team1, team2);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (canManage && onClick && !isDndEnabled && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
           onClick(match, team1, team2);
         }
       }}
@@ -204,7 +202,7 @@ export default function MatchCard({
           }
         }}
         onDragLeave={(e) => {
-          if (isDndEnabled) {
+          if (isDndEnabled && !e.currentTarget.contains(e.relatedTarget as Node)) {
             e.stopPropagation();
             setDragOverSlot(null);
           }
@@ -217,8 +215,6 @@ export default function MatchCard({
             onSlotDrop?.(match.id, 1);
           }
         }}
-        onMouseEnter={() => handleMouseEnter(match.team1_id)}
-        onMouseLeave={() => handleMouseLeave(match.team1_id)}
         className={`team-slot ${match.team1_id ? 'team-slot-' + match.team1_id : ''}`}
         style={{
           display: 'flex',
@@ -238,7 +234,7 @@ export default function MatchCard({
           outline: dragOverSlot === 1 ? '2px dashed var(--primary)' : 'none',
           outlineOffset: '-2px',
         }}
-        title={isDndEnabled && Boolean(team1) ? 'Arrastra este equipo para reubicarlo' : undefined}
+        title={isDndEnabled && Boolean(team1) ? t("brackets.drag_to_reorder") : undefined}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, paddingRight: '8px', minWidth: 0 }}>
           {isDndEnabled && Boolean(team1) && (
@@ -283,7 +279,7 @@ export default function MatchCard({
           }
         }}
         onDragLeave={(e) => {
-          if (isDndEnabled) {
+          if (isDndEnabled && !e.currentTarget.contains(e.relatedTarget as Node)) {
             e.stopPropagation();
             setDragOverSlot(null);
           }
@@ -296,8 +292,6 @@ export default function MatchCard({
             onSlotDrop?.(match.id, 2);
           }
         }}
-        onMouseEnter={() => handleMouseEnter(match.team2_id)}
-        onMouseLeave={() => handleMouseLeave(match.team2_id)}
         className={`team-slot ${match.team2_id ? 'team-slot-' + match.team2_id : ''}`}
         style={{
           display: 'flex',
@@ -316,7 +310,7 @@ export default function MatchCard({
           outline: dragOverSlot === 2 ? '2px dashed var(--primary)' : 'none',
           outlineOffset: '-2px',
         }}
-        title={isDndEnabled && Boolean(team2) ? 'Arrastra este equipo para reubicarlo' : undefined}
+        title={isDndEnabled && Boolean(team2) ? t("brackets.drag_to_reorder") : undefined}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, paddingRight: '8px', minWidth: 0 }}>
           {isDndEnabled && Boolean(team2) && (

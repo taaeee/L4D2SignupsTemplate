@@ -5,13 +5,16 @@ import { signIn } from "next-auth/react";
 import { ArrowLeft, KeyRound, Mail, User as UserIcon, Lock, X } from "lucide-react";
 import Link from "next/link";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslation } from "@/lib/i18n";
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
@@ -41,16 +44,16 @@ function LoginContent() {
       });
 
       if (res?.error) {
-        const msg = res.error === "CredentialsSignin" ? "Correo o contraseña incorrectos." : res.error;
+        const msg = res.error === "CredentialsSignin" ? t("auth.invalid_credentials") : res.error;
         setErrorMessage(msg);
         toast.error(msg);
       } else if (res?.ok) {
-        toast.success("¡Sesión iniciada correctamente!");
+        toast.success(t("auth.login_success"));
         router.push(callbackUrl);
         router.refresh();
       }
     } catch (err: any) {
-      toast.error("Ocurrió un error al intentar iniciar sesión.");
+      toast.error(t("common.error_network"));
     } finally {
       setLoading(false);
     }
@@ -61,7 +64,7 @@ function LoginContent() {
     setErrorMessage(null);
 
     if (password !== confirmPassword) {
-      const msg = "Las contraseñas no coinciden.";
+      const msg = t("auth.passwords_dont_match");
       setErrorMessage(msg);
       toast.error(msg);
       return;
@@ -79,11 +82,11 @@ function LoginContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        const msg = data.error || "Ocurrió un error al registrar la cuenta.";
+        const msg = data.error || t("common.error_network");
         setErrorMessage(msg);
         toast.error(msg);
       } else {
-        toast.success("¡Cuenta creada exitosamente! Iniciando sesión...");
+        toast.success(t("auth.register_success"));
         
         // Auto sign-in after registration
         const loginRes = await signIn("credentials", {
@@ -100,7 +103,7 @@ function LoginContent() {
         }
       }
     } catch (err) {
-      toast.error("Error al conectar con el servidor.");
+      toast.error(t("common.error_network"));
     } finally {
       setLoading(false);
     }
@@ -120,14 +123,14 @@ function LoginContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || "Error al solicitar la recuperación.");
+        toast.error(data.error || t("common.error_network"));
       } else {
         toast.success(data.message, { duration: 6000 });
         setShowForgotModal(false);
         setResetEmail("");
       }
     } catch (err) {
-      toast.error("Error al enviar la solicitud.");
+      toast.error(t("common.error_network"));
     } finally {
       setSendingReset(false);
     }
@@ -137,10 +140,10 @@ function LoginContent() {
     <div className="login-card card">
       <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
-          Bienvenido a <span className="text-gradient">L4D2</span>
+          {t("auth.welcome")} <span className="text-gradient">L4D2</span>
         </h1>
         <p className="text-muted">
-          Inicia sesión o crea tu cuenta para organizar torneos
+          {t("auth.subtitle")}
         </p>
       </div>
 
@@ -154,7 +157,7 @@ function LoginContent() {
             setErrorMessage(null);
           }}
         >
-          Iniciar Sesión
+          {t("auth.tab_login")}
         </button>
         <button
           type="button"
@@ -164,7 +167,7 @@ function LoginContent() {
             setErrorMessage(null);
           }}
         >
-          Crear Cuenta
+          {t("auth.tab_register")}
         </button>
       </div>
 
@@ -181,7 +184,7 @@ function LoginContent() {
             <Mail size={18} className="input-icon" />
             <input
               type="email"
-              placeholder="Correo electrónico"
+              placeholder={t("auth.email_placeholder")}
               className="form-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -193,7 +196,7 @@ function LoginContent() {
             <Lock size={18} className="input-icon" />
             <input
               type="password"
-              placeholder="Contraseña"
+              placeholder={t("auth.password_placeholder")}
               className="form-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -210,7 +213,7 @@ function LoginContent() {
                 setShowForgotModal(true);
               }}
             >
-              ¿Olvidaste tu contraseña?
+              {t("auth.forgot_password")}
             </button>
           </div>
 
@@ -219,7 +222,7 @@ function LoginContent() {
             disabled={loading}
             className="btn btn-primary submit-btn"
           >
-            {loading ? "Ingresando..." : "Ingresar con correo"}
+            {loading ? t("auth.submitting_login") : t("auth.submit_login")}
           </button>
         </form>
       ) : (
@@ -228,7 +231,7 @@ function LoginContent() {
             <UserIcon size={18} className="input-icon" />
             <input
               type="text"
-              placeholder="Nombre de usuario"
+              placeholder={t("auth.username_placeholder")}
               className="form-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -241,7 +244,7 @@ function LoginContent() {
             <Mail size={18} className="input-icon" />
             <input
               type="email"
-              placeholder="Correo electrónico"
+              placeholder={t("auth.email_placeholder")}
               className="form-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -253,7 +256,7 @@ function LoginContent() {
             <Lock size={18} className="input-icon" />
             <input
               type="password"
-              placeholder="Contraseña (mín. 8 caracteres)"
+              placeholder={t("auth.password_register_placeholder")}
               className="form-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -266,7 +269,7 @@ function LoginContent() {
             <KeyRound size={18} className="input-icon" />
             <input
               type="password"
-              placeholder="Confirmar contraseña"
+              placeholder={t("auth.confirm_password_placeholder")}
               className="form-input"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
@@ -280,14 +283,14 @@ function LoginContent() {
             disabled={loading}
             className="btn btn-primary submit-btn"
           >
-            {loading ? "Creando cuenta..." : "Registrarme"}
+            {loading ? t("auth.submitting_register") : t("auth.submit_register")}
           </button>
         </form>
       )}
 
       {/* Separator */}
       <div className="divider">
-        <span>O continúa con</span>
+        <span>{t("auth.or_continue_with")}</span>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -313,7 +316,7 @@ function LoginContent() {
               d="M12 2a10 10 0 0 1 10 10a10 10 0 0 1-10 10c-4.6 0-8.45-3.08-9.64-7.27l3.83 1.58a2.84 2.84 0 0 0 2.78 2.27c1.56 0 2.83-1.27 2.83-2.83v-.13l3.4-2.43h.08c2.08 0 3.77-1.69 3.77-3.77s-1.69-3.77-3.77-3.77s-3.78 1.69-3.78 3.77v.05l-2.37 3.46l-.16-.01c-.59 0-1.14.18-1.59.49L2 11.2C2.43 6.05 6.73 2 12 2M8.28 17.17c.8.33 1.72-.04 2.05-.84s-.05-1.71-.83-2.04l-1.28-.53c.49-.18 1.04-.19 1.56.03c.53.21.94.62 1.15 1.15c.22.52.22 1.1 0 1.62c-.43 1.08-1.7 1.6-2.78 1.15c-.5-.21-.88-.59-1.09-1.04zm9.52-7.75c0 1.39-1.13 2.52-2.52 2.52a2.52 2.52 0 0 1-2.51-2.52a2.5 2.5 0 0 1 2.51-2.51a2.52 2.52 0 0 1 2.52 2.51m-4.4 0c0 1.04.84 1.89 1.89 1.89c1.04 0 1.88-.85 1.88-1.89s-.84-1.89-1.88-1.89c-1.05 0-1.89.85-1.89 1.89"
             />
           </svg>
-          Iniciar sesión con Steam
+          {t("auth.login_with_steam")}
         </button>
 
         {/* Discord Button */}
@@ -329,7 +332,7 @@ function LoginContent() {
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
             <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
           </svg>
-          Iniciar sesión con Discord
+          {t("auth.login_with_discord")}
         </button>
 
         {/* Google Button */}
@@ -372,7 +375,7 @@ function LoginContent() {
               />
             </g>
           </svg>
-          Iniciar sesión con Google
+          {t("auth.login_with_google")}
         </button>
       </div>
 
@@ -381,7 +384,7 @@ function LoginContent() {
         <div className="modal-overlay">
           <div className="modal-content card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h2 style={{ fontSize: "1.25rem", margin: 0 }}>Recuperar Contraseña</h2>
+              <h2 style={{ fontSize: "1.25rem", margin: 0 }}>{t("auth.forgot_modal_title")}</h2>
               <button
                 type="button"
                 className="btn-icon"
@@ -392,7 +395,7 @@ function LoginContent() {
             </div>
 
             <p className="text-muted" style={{ fontSize: "0.875rem", marginBottom: "1.25rem" }}>
-              Ingresa tu correo electrónico. Si la cuenta existe, te enviaremos un enlace seguro para restablecer tu contraseña.
+              {t("auth.forgot_modal_desc")}
             </p>
 
             <form onSubmit={handleRequestReset} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -400,7 +403,7 @@ function LoginContent() {
                 <Mail size={18} className="input-icon" />
                 <input
                   type="email"
-                  placeholder="Tu correo electrónico"
+                  placeholder={t("auth.email_placeholder")}
                   className="form-input"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
@@ -413,7 +416,7 @@ function LoginContent() {
                 disabled={sendingReset}
                 className="btn btn-primary submit-btn"
               >
-                {sendingReset ? "Enviando correo..." : "Enviar Correo de Recuperación"}
+                {sendingReset ? t("auth.sending_recovery_email") : t("auth.send_recovery_email")}
               </button>
             </form>
           </div>
@@ -578,12 +581,13 @@ function LoginContent() {
 }
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   return (
     <div
       className="container"
       style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}
     >
-      <header style={{ padding: "1.5rem 0" }}>
+      <header style={{ padding: "1.5rem 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Link
           href="/"
           className="btn btn-secondary"
@@ -596,8 +600,9 @@ export default function LoginPage() {
             background: "transparent",
           }}
         >
-          <ArrowLeft size={18} /> Volver al inicio
+          <ArrowLeft size={18} /> {t("common.back_to_home")}
         </Link>
+        <LanguageSwitcher />
       </header>
 
       <main
@@ -608,7 +613,7 @@ export default function LoginPage() {
           justifyContent: "center",
         }}
       >
-        <Suspense fallback={<LoadingSpinner text="Cargando formulario..." />}>
+        <Suspense fallback={<LoadingSpinner />}>
           <LoginContent />
         </Suspense>
       </main>

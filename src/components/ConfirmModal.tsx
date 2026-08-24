@@ -1,5 +1,6 @@
 import React from "react";
 import { AlertTriangle, X } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -18,10 +19,14 @@ export default function ConfirmModal({
   message, 
   onConfirm, 
   onCancel, 
-  confirmText = "Aceptar",
-  cancelText = "Cancelar",
+  confirmText,
+  cancelText,
   isDanger = false
 }: ConfirmModalProps) {
+  const { t } = useTranslation();
+  const effectiveConfirmText = confirmText || t("common.accept");
+  const effectiveCancelText = cancelText || t("common.cancel");
+
   if (!isOpen) return null;
 
   return (
@@ -66,13 +71,13 @@ export default function ConfirmModal({
           
           <div style={{ display: "flex", gap: "1rem", width: "100%" }}>
             <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onCancel}>
-              {cancelText}
+              {effectiveCancelText}
             </button>
             <button className={`btn ${isDanger ? 'btn-danger' : 'btn-primary'}`} style={{ flex: 1 }} onClick={() => {
               onConfirm();
               onCancel(); // Close automatically
             }}>
-              {confirmText}
+              {effectiveConfirmText}
             </button>
           </div>
         </div>

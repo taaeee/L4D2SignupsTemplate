@@ -15,13 +15,30 @@ import {
   Play,
   Calendar,
   MapPin,
+  Map as MapIcon,
   Edit,
   Shuffle,
-  Tv
+  Tv,
+  Plus,
+  Check,
+  Layers,
+  Filter
 } from "lucide-react";
 import { toast } from "sonner";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import ScoreModal from "@/components/ScoreModal";
+import ChooseMapModal from "@/components/ChooseMapModal";
 import { supabase } from "@/lib/supabase";
+import { useTranslation } from "@/lib/i18n";
+
+import {
+  extractPlatformUsername,
+  getMatchStatus,
+  resolveStreamInfo,
+  formatYoutubeUrl,
+  formatYoutubeEmbedUrl,
+} from "@/lib/match-utils";
+export { extractPlatformUsername, getMatchStatus, resolveStreamInfo };
 
 // Twitch SVG Icon
 const TwitchIcon = ({ size = 18, className = "" }: { size?: number; className?: string }) => (
@@ -50,117 +67,41 @@ const YoutubeIcon = ({ size = 18, className = "" }: { size?: number; className?:
   </svg>
 );
 
-// Helpers to format streaming URLs properly
-const formatYoutubeUrl = (channelOrUrl?: string | null) => {
-  if (!channelOrUrl) return "https://youtube.com";
-  const trimmed = channelOrUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
-  }
-  if (trimmed.startsWith("@")) {
-    return `https://www.youtube.com/${trimmed}`;
-  }
-  if (trimmed.startsWith("UC") && trimmed.length >= 20) {
-    return `https://www.youtube.com/channel/${trimmed}`;
-  }
-  return `https://www.youtube.com/@${trimmed}`;
-};
+// Default Official & Custom Maps catalogs
+const DEFAULT_OFFICIAL_MAPS = [
+  { name: "Dead Center", type: "official" },
+  { name: "Dark Carnival", type: "official" },
+  { name: "Swamp Fever", type: "official" },
+  { name: "Hard Rain", type: "official" },
+  { name: "The Parish", type: "official" },
+  { name: "The Passing", type: "official" },
+  { name: "The Sacrifice", type: "official" },
+  { name: "No Mercy", type: "official" },
+  { name: "Crash Course", type: "official" },
+  { name: "Death Toll", type: "official" },
+  { name: "Dead Air", type: "official" },
+  { name: "Blood Harvest", type: "official" },
+  { name: "Cold Stream", type: "official" },
+  { name: "The Last Stand", type: "official" },
+];
 
-const formatYoutubeEmbedUrl = (channelOrUrl?: string | null) => {
-  if (!channelOrUrl) return "";
-  const trimmed = channelOrUrl.trim();
-  if (trimmed.includes("/embed/")) return trimmed;
-  const videoMatch = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([\w-]{11})/);
-  if (videoMatch && videoMatch[1]) {
-    return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1`;
-  }
-  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
-    return `https://www.youtube.com/embed/${trimmed}?autoplay=1`;
-  }
-  return `https://www.youtube.com/embed/live_stream?channel=${encodeURIComponent(trimmed)}&autoplay=1`;
-};
+const DEFAULT_CUSTOM_MAPS = [
+  { name: "Dark Wood", type: "custom" },
+  { name: "Suicide Blitz 2", type: "custom" },
+  { name: "Detour Ahead", type: "custom" },
+  { name: "Urban Flight", type: "custom" },
+  { name: "I Hate Mountains 2", type: "custom" },
+  { name: "Warcelona", type: "custom" },
+  { name: "Yama", type: "custom" },
+  { name: "Day Break", type: "custom" },
+  { name: "Dies Scraper Redux", type: "custom" },
+  { name: "Fairfield Terror", type: "custom" },
+  { name: "Plan B", type: "custom" },
+  { name: "Questionable Ethics", type: "custom" },
+];
 
-export const resolveStreamInfo = (streamUrl?: string | null, casterObj?: any) => {
-  const raw = (streamUrl || "").trim();
-  const twitchChan = (casterObj?.twitch_channel || "").trim();
-  const kickChan = (casterObj?.kick_channel || "").trim();
-  const ytChan = (casterObj?.youtube_channel || "").trim();
-  const primaryPlatform = casterObj?.primary_platform || "";
-
-  let platform: "twitch" | "kick" | "youtube" = "twitch";
-  let channel = "";
-  let directUrl = "";
-
-  const lowerRaw = raw.toLowerCase();
-
-  if (lowerRaw.includes("kick.com") || lowerRaw.startsWith("kick:")) {
-    platform = "kick";
-    channel = raw.replace(/^https?:\/\/(www\.)?kick\.com\//i, "").replace(/^kick:/i, "").replace(/^\//, "").split("/")[0] || "";
-    directUrl = `https://kick.com/${channel}`;
-  } else if (lowerRaw.includes("youtube.com") || lowerRaw.includes("youtu.be")) {
-    platform = "youtube";
-    channel = raw;
-    directUrl = formatYoutubeUrl(raw);
-  } else if (lowerRaw.includes("twitch.tv") || lowerRaw.startsWith("twitch:")) {
-    platform = "twitch";
-    channel = raw.replace(/^https?:\/\/(www\.)?twitch\.tv\//i, "").replace(/^twitch:/i, "").replace(/^\//, "").split("/")[0] || "";
-    directUrl = `https://twitch.tv/${channel}`;
-  } else if (raw) {
-    if (primaryPlatform === "kick" || (kickChan && raw.toLowerCase() === kickChan.toLowerCase())) {
-      platform = "kick";
-      channel = kickChan ? kickChan.replace(/^https?:\/\/(www\.)?kick\.com\//i, "").trim() : raw;
-      directUrl = `https://kick.com/${channel}`;
-    } else if (primaryPlatform === "youtube" || (ytChan && raw.toLowerCase() === ytChan.toLowerCase())) {
-      platform = "youtube";
-      channel = ytChan || raw;
-      directUrl = formatYoutubeUrl(channel);
-    } else if (kickChan && !twitchChan) {
-      platform = "kick";
-      channel = kickChan.replace(/^https?:\/\/(www\.)?kick\.com\//i, "").trim();
-      directUrl = `https://kick.com/${channel}`;
-    } else if (ytChan && !twitchChan && !kickChan) {
-      platform = "youtube";
-      channel = ytChan;
-      directUrl = formatYoutubeUrl(channel);
-    } else {
-      channel = raw.replace(/^https?:\/\/(www\.)?twitch\.tv\//i, "").replace(/^@/, "").trim();
-      directUrl = `https://twitch.tv/${channel}`;
-      platform = "twitch";
-    }
-  } else {
-    if (primaryPlatform === "kick" && kickChan) {
-      platform = "kick";
-      channel = kickChan.replace(/^https?:\/\/(www\.)?kick\.com\//i, "").trim();
-      directUrl = `https://kick.com/${channel}`;
-    } else if (primaryPlatform === "youtube" && ytChan) {
-      platform = "youtube";
-      channel = ytChan;
-      directUrl = formatYoutubeUrl(ytChan);
-    } else if (twitchChan) {
-      platform = "twitch";
-      channel = twitchChan.replace(/^https?:\/\/(www\.)?twitch\.tv\//i, "").trim();
-      directUrl = `https://twitch.tv/${channel}`;
-    } else if (kickChan) {
-      platform = "kick";
-      channel = kickChan.replace(/^https?:\/\/(www\.)?kick\.com\//i, "").trim();
-      directUrl = `https://kick.com/${channel}`;
-    } else if (ytChan) {
-      platform = "youtube";
-      channel = ytChan;
-      directUrl = formatYoutubeUrl(ytChan);
-    }
-  }
-
-  return {
-    platform,
-    channel,
-    directUrl,
-    isKick: platform === "kick",
-    isYoutube: platform === "youtube",
-    isTwitch: platform === "twitch",
-    platformName: platform === "kick" ? "Kick" : platform === "youtube" ? "YouTube" : "Twitch",
-    brandColor: platform === "kick" ? "#53FC18" : platform === "youtube" ? "#EF4444" : "#9146FF",
-  };
+export const invalidateMatchesCache = () => {
+  cachedMatchesData = null;
 };
 
 let cachedMatchesData: {
@@ -170,24 +111,8 @@ let cachedMatchesData: {
   maps: any[];
 } | null = null;
 
-// Helper to determine accurate status
-export const getMatchStatus = (m: any): "live" | "completed" | "upcoming" => {
-  if (m.status === "in_progress") return "live";
-
-  // Only matches with a real marked score / result are completed
-  const hasScore =
-    m.score1 !== null &&
-    m.score2 !== null &&
-    (m.score1 > 0 || m.score2 > 0);
-
-  const isCompleted =
-    hasScore ||
-    (m.status === "completed" && m.winner_id && (m.score1 > 0 || m.score2 > 0));
-
-  return isCompleted ? "completed" : "upcoming";
-};
-
 export default function MatchesPage() {
+  const { t } = useTranslation();
   const { data: session } = useSession();
   const router = useRouter();
 
@@ -203,6 +128,7 @@ export default function MatchesPage() {
   // Filter States
   const [selectedTournament, setSelectedTournament] = useState<string>("all");
   const [selectedCaster, setSelectedCaster] = useState<string>("all");
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -250,40 +176,45 @@ export default function MatchesPage() {
     isSubmitting: false,
   });
 
-  // Edit Schedule & Maps Modal State
+  // Edit Schedule Modal State (Date & Time only)
   const [scheduleModal, setScheduleModal] = useState<{
     isOpen: boolean;
     match: any | null;
     scheduledDate: string;
     scheduledTime: string;
-    selectedMaps: string[];
-    customMapInput: string;
     isSubmitting: boolean;
   }>({
     isOpen: false,
     match: null,
     scheduledDate: "",
     scheduledTime: "",
-    selectedMaps: [],
-    customMapInput: "",
     isSubmitting: false,
   });
 
-  // Finalize Match Modal State
-  const [finalizeModal, setFinalizeModal] = useState<{
+  // Choose Maps Modal State
+  const [chooseMapModal, setChooseMapModal] = useState<{
     isOpen: boolean;
     match: any | null;
-    score1: number;
-    score2: number;
-    winnerId: string;
-    isSubmitting: boolean;
+    isSaving: boolean;
   }>({
     isOpen: false,
     match: null,
-    score1: 0,
-    score2: 0,
-    winnerId: "",
-    isSubmitting: false,
+    isSaving: false,
+  });
+
+  // Finalize Match / Score Modal State
+  const [scoreModal, setScoreModal] = useState<{
+    isOpen: boolean;
+    match: any | null;
+    team1: any | null;
+    team2: any | null;
+    isSaving: boolean;
+  }>({
+    isOpen: false,
+    match: null,
+    team1: null,
+    team2: null,
+    isSaving: false,
   });
 
   useEffect(() => {
@@ -507,6 +438,25 @@ export default function MatchesPage() {
         }
       }
 
+      // Platform Filter (Twitch, Kick, Youtube)
+      if (selectedPlatform !== "all") {
+        const matchHasPlatform = m.assigned_casters?.some((c: any) => {
+          const casterDetails = c.casters;
+          const streamUrl = (c.stream_url || casterDetails?.twitch_channel || casterDetails?.kick_channel || casterDetails?.youtube_channel || "").toLowerCase();
+          if (selectedPlatform === "twitch") {
+            return streamUrl.includes("twitch") || !!casterDetails?.twitch_channel;
+          }
+          if (selectedPlatform === "kick") {
+            return streamUrl.includes("kick") || !!casterDetails?.kick_channel;
+          }
+          if (selectedPlatform === "youtube") {
+            return streamUrl.includes("youtube") || streamUrl.includes("youtu.be") || !!casterDetails?.youtube_channel;
+          }
+          return false;
+        });
+        if (!matchHasPlatform) return false;
+      }
+
       // Status Filter based on actual result
       const currentStatus = getMatchStatus(m);
       if (statusFilter === "live" && currentStatus !== "live") return false;
@@ -535,7 +485,24 @@ export default function MatchesPage() {
 
       return true;
     });
-  }, [validMatches, selectedTournament, selectedCaster, statusFilter, searchQuery]);
+  }, [validMatches, selectedTournament, selectedCaster, selectedPlatform, statusFilter, searchQuery]);
+
+  // Combined available maps catalog for selection
+  const combinedMapCatalog = useMemo(() => {
+    const mapSet = new Map<string, { name: string; type: "official" | "custom"; imageUrl?: string }>();
+    
+    DEFAULT_OFFICIAL_MAPS.forEach((m) => mapSet.set(m.name.toUpperCase(), { name: m.name, type: "official" }));
+    DEFAULT_CUSTOM_MAPS.forEach((m) => mapSet.set(m.name.toUpperCase(), { name: m.name, type: "custom" }));
+    
+    if (Array.isArray(availableMaps)) {
+      availableMaps.forEach((m: any) => {
+        const type = m.type === "official" ? "official" : "custom";
+        mapSet.set(m.name.toUpperCase(), { name: m.name, type, imageUrl: m.imageUrl });
+      });
+    }
+    
+    return Array.from(mapSet.values());
+  }, [availableMaps]);
 
   // Counts for status tabs
   const liveCount = useMemo(
@@ -555,7 +522,7 @@ export default function MatchesPage() {
   const formatScheduleInfo = (scheduledAt: string | null) => {
     if (!scheduledAt) {
       return {
-        formattedDate: "Horario por definir",
+        formattedDate: t("matches.schedule_tbd"),
         formattedTime: "",
         timezone: "",
         isTBD: true,
@@ -566,7 +533,7 @@ export default function MatchesPage() {
       const date = new Date(scheduledAt);
       if (isNaN(date.getTime())) {
         return {
-          formattedDate: "Horario por definir",
+          formattedDate: t("matches.schedule_tbd"),
           formattedTime: "",
           timezone: "",
           isTBD: true,
@@ -597,7 +564,7 @@ export default function MatchesPage() {
       };
     } catch (e) {
       return {
-        formattedDate: "Horario por definir",
+        formattedDate: t("matches.schedule_tbd"),
         formattedTime: "",
         timezone: "",
         isTBD: true,
@@ -632,7 +599,6 @@ export default function MatchesPage() {
     }
 
     const isAssignedCaster =
-      isCaster &&
       match.assigned_casters?.some(
         (c: any) =>
           c.caster_id === userCasterInfo?.id || c.casters?.user_id === userId
@@ -650,7 +616,7 @@ export default function MatchesPage() {
     return { canEditSchedule, canAdmin, isAssignedCaster, canManageStream };
   };
 
-  // Open Edit Schedule & Maps Modal
+  // Open Edit Schedule Modal (Time & Date only)
   const handleOpenScheduleModal = (match: any) => {
     let dateStr = "";
     let timeStr = "";
@@ -674,13 +640,11 @@ export default function MatchesPage() {
       match,
       scheduledDate: dateStr,
       scheduledTime: timeStr,
-      selectedMaps: Array.isArray(match.selected_maps) ? [...match.selected_maps] : [],
-      customMapInput: "",
       isSubmitting: false,
     });
   };
 
-  // Save Schedule & Maps
+  // Save Schedule (Time & Date only)
   const handleSaveSchedule = async () => {
     if (!scheduleModal.match) return;
 
@@ -700,22 +664,58 @@ export default function MatchesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scheduledAt: isoString,
-          selectedMaps: scheduleModal.selectedMaps,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "No se pudo actualizar el schedule.");
+        toast.error(data.error || "No se pudo actualizar el horario.");
       } else {
-        toast.success("Schedule y mapas actualizados correctamente.");
+        toast.success("Horario actualizado correctamente.");
         setScheduleModal((prev) => ({ ...prev, isOpen: false }));
         fetchInitialData();
       }
     } catch (e) {
-      toast.error("Error al guardar el schedule.");
+      toast.error("Error al guardar el horario.");
     } finally {
       setScheduleModal((prev) => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  // Open Choose Maps Modal
+  const handleOpenChooseMapModal = (match: any) => {
+    setChooseMapModal({
+      isOpen: true,
+      match,
+      isSaving: false,
+    });
+  };
+
+  // Save Chosen Maps
+  const handleSaveChosenMaps = async (selectedMaps: string[]) => {
+    if (!chooseMapModal.match) return;
+    setChooseMapModal((prev) => ({ ...prev, isSaving: true }));
+    try {
+      const res = await fetch(`/api/matches/${chooseMapModal.match.id}/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedMaps,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "No se pudo actualizar los mapas.");
+      } else {
+        toast.success("Mapas del partido actualizados correctamente.");
+        setChooseMapModal({ isOpen: false, match: null, isSaving: false });
+        fetchInitialData();
+      }
+    } catch (e) {
+      toast.error("Error al guardar los mapas.");
+    } finally {
+      setChooseMapModal((prev) => ({ ...prev, isSaving: false }));
     }
   };
 
@@ -745,44 +745,39 @@ export default function MatchesPage() {
 
   // Open Finalize Match Modal
   const handleOpenFinalizeModal = (match: any) => {
-    setFinalizeModal({
+    setScoreModal({
       isOpen: true,
       match,
-      score1: match.score1 || 0,
-      score2: match.score2 || 0,
-      winnerId: match.winner_id || match.team1_id,
-      isSubmitting: false,
+      team1: match.team1 || { id: match.team1_id, name: match.team1_id ? "Equipo 1" : "Por Definir" },
+      team2: match.team2 || { id: match.team2_id, name: match.team2_id ? "Equipo 2" : "Por Definir" },
+      isSaving: false,
     });
   };
 
-  // Submit Finalize Match (Calls report API to advance brackets properly)
-  const handleFinalizeMatch = async () => {
-    if (!finalizeModal.match) return;
+  // Submit Finalize Match / Score Report
+  const handleSaveScore = async (data: { score1: number; score2: number; winner_id: string }) => {
+    if (!scoreModal.match) return;
 
-    setFinalizeModal((prev) => ({ ...prev, isSubmitting: true }));
+    setScoreModal((prev) => ({ ...prev, isSaving: true }));
     try {
-      const res = await fetch(`/api/matches/${finalizeModal.match.id}/report`, {
+      const res = await fetch(`/api/matches/${scoreModal.match.id}/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          score1: finalizeModal.score1,
-          score2: finalizeModal.score2,
-          winner_id: finalizeModal.winnerId,
-        }),
+        body: JSON.stringify(data),
       });
 
-      const data = await res.json();
+      const result = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "Error al registrar el resultado.");
+        toast.error(result.error || "Error al registrar el resultado.");
       } else {
         toast.success("Resultado guardado y llaves del torneo actualizadas.");
-        setFinalizeModal((prev) => ({ ...prev, isOpen: false }));
+        setScoreModal({ isOpen: false, match: null, team1: null, team2: null, isSaving: false });
         fetchInitialData();
       }
     } catch (e) {
       toast.error("Error de red al registrar el resultado.");
     } finally {
-      setFinalizeModal((prev) => ({ ...prev, isSubmitting: false }));
+      setScoreModal((prev) => ({ ...prev, isSaving: false }));
     }
   };
 
@@ -955,7 +950,7 @@ export default function MatchesPage() {
   };
 
   if (isLoading && !cachedMatchesData) {
-    return <LoadingSpinner text="Cargando Matches..." fullHeight={true} />;
+    return <LoadingSpinner text={t("common.loading")} fullHeight={true} />;
   }
 
   return (
@@ -988,10 +983,10 @@ export default function MatchesPage() {
           </div>
           <div>
             <h1 style={{ fontSize: "1.6rem", margin: 0, fontWeight: "bold" }}>
-              <span className="text-gradient">Matches</span> Hub
+              <span className="text-gradient">{t("matches.matches_hub")}</span>
             </h1>
             <p className="text-muted text-sm" style={{ margin: 0 }}>
-              Partidos, horarios adaptados a tu zona horaria local, mapas y transmisiones oficiales
+              {t("matches.matches_hub_desc")}
             </p>
           </div>
         </div>
@@ -1011,7 +1006,7 @@ export default function MatchesPage() {
             >
               <TwitchIcon size={18} className="text-[#9146FF]" />
               <span style={{ fontSize: "0.85rem", fontWeight: "bold", color: "#C499FF" }}>
-                Caster Oficial: {userCasterInfo?.alias || session?.user?.name}
+                {t("caster.official_caster_badge")}: {userCasterInfo?.alias || session?.user?.name}
               </span>
             </div>
           )}
@@ -1054,7 +1049,7 @@ export default function MatchesPage() {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: "bold", color: "#FFFFFF" }}>
-                  ¿Eres streamer o te gustaría castear partidos oficiales?
+                  {t("matches.caster_promo_title")}
                 </h3>
                 <span
                   style={{
@@ -1067,14 +1062,14 @@ export default function MatchesPage() {
                     border: "1px solid rgba(145, 70, 255, 0.4)",
                   }}
                 >
-                  Rol Caster
+                  {t("caster.request_caster_role")}
                 </span>
               </div>
               <p style={{ margin: "0.35rem 0 0", fontSize: "0.875rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
-                Postúlate como <strong>Caster Oficial</strong> para poder transmitir y narrar los partidos de los torneos en vivo.
+                {t("matches.caster_promo_desc")}
               </p>
               <span style={{ display: "block", marginTop: "0.25rem", fontSize: "0.75rem", color: "var(--text-disabled)" }}>
-                (Recuerda que siempre puedes encontrar y gestionar esta opción en <strong>Ajustes &gt; Caster Oficial</strong>)
+                {t("matches.caster_promo_hint")}
               </span>
             </div>
           </div>
@@ -1095,14 +1090,14 @@ export default function MatchesPage() {
                 gap: "0.4rem",
               }}
             >
-              <TwitchIcon size={16} /> Postularme como Caster
+              <TwitchIcon size={16} /> {t("matches.apply_as_caster_btn")}
             </button>
             <button
               className="btn text-sm"
               onClick={() => {
                 localStorage.setItem("hide_caster_promo_banner", "true");
                 setDismissedCasterBanner(true);
-                toast.info("Aviso ocultado. Recuerda que puedes postularte en cualquier momento desde Ajustes > Caster Oficial.");
+                toast.info(t("common.saved_success"));
               }}
               style={{
                 background: "rgba(255, 255, 255, 0.06)",
@@ -1111,7 +1106,7 @@ export default function MatchesPage() {
                 padding: "0.6rem 1rem",
               }}
             >
-              No volver a mostrar
+              {t("matches.do_not_show_again")}
             </button>
           </div>
         </div>
@@ -1138,28 +1133,28 @@ export default function MatchesPage() {
             className={`btn ${statusFilter === "all" ? "btn-primary" : "btn-secondary"}`}
             style={{ fontSize: "0.85rem", padding: "0.45rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
           >
-            <Swords size={16} /> Todos ({validMatches.length})
+            <Swords size={16} /> {t("matches.tab_all_matches")} ({validMatches.length})
           </button>
           <button
             onClick={() => setStatusFilter("live")}
             className={`btn ${statusFilter === "live" ? "btn-primary" : "btn-secondary"}`}
             style={{ fontSize: "0.85rem", padding: "0.45rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
           >
-            <Radio size={16} color={statusFilter === "live" ? "#000" : "#EF4444"} /> En Vivo ({liveCount})
+            <Radio size={16} color={statusFilter === "live" ? "#000" : "#EF4444"} /> {t("matches.tab_live")} ({liveCount})
           </button>
           <button
             onClick={() => setStatusFilter("upcoming")}
             className={`btn ${statusFilter === "upcoming" ? "btn-primary" : "btn-secondary"}`}
             style={{ fontSize: "0.85rem", padding: "0.45rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
           >
-            <Clock size={16} /> Próximos ({upcomingCount})
+            <Clock size={16} /> {t("matches.tab_upcoming")} ({upcomingCount})
           </button>
           <button
             onClick={() => setStatusFilter("completed")}
             className={`btn ${statusFilter === "completed" ? "btn-primary" : "btn-secondary"}`}
             style={{ fontSize: "0.85rem", padding: "0.45rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
           >
-            <CheckCircle2 size={16} /> Finalizados ({completedCount})
+            <CheckCircle2 size={16} /> {t("matches.tab_completed")} ({completedCount})
           </button>
         </div>
 
@@ -1168,7 +1163,7 @@ export default function MatchesPage() {
           {/* Tournament Dropdown */}
           <div style={{ flex: "1 1 200px" }}>
             <label style={{ display: "block", fontSize: "0.75rem", color: "var(--muted)", marginBottom: "0.3rem" }}>
-              Torneo Activo
+              {t("matches.active_tournament")}
             </label>
             <select
               className="input-base"
@@ -1176,7 +1171,7 @@ export default function MatchesPage() {
               onChange={(e) => setSelectedTournament(e.target.value)}
               style={{ width: "100%", fontSize: "0.9rem", padding: "0.6rem" }}
             >
-              <option value="all">Todos los Torneos</option>
+              <option value="all">{t("matches.filter_all_tournaments")}</option>
               {tournaments.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
@@ -1186,9 +1181,9 @@ export default function MatchesPage() {
           </div>
 
           {/* Caster Dropdown */}
-          <div style={{ flex: "1 1 200px" }}>
+          <div style={{ flex: "1 1 170px" }}>
             <label style={{ display: "block", fontSize: "0.75rem", color: "var(--muted)", marginBottom: "0.3rem" }}>
-              Casters Oficiales
+              {t("matches.official_casters")}
             </label>
             <select
               className="input-base"
@@ -1196,27 +1191,45 @@ export default function MatchesPage() {
               onChange={(e) => setSelectedCaster(e.target.value)}
               style={{ width: "100%", fontSize: "0.9rem", padding: "0.6rem" }}
             >
-              <option value="all">Todos los Casters</option>
-              <option value="has_caster">Solo con Caster asignado</option>
+              <option value="all">{t("matches.filter_all_casters")}</option>
+              <option value="has_caster">{t("matches.only_with_caster")}</option>
               {casters.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.alias || c.twitch_channel} (Twitch)
+                  {c.alias || c.user_id}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Platform Dropdown Filter */}
+          <div style={{ flex: "1 1 160px" }}>
+            <label style={{ display: "block", fontSize: "0.75rem", color: "var(--muted)", marginBottom: "0.3rem" }}>
+              {t("matches.filter_platform")}
+            </label>
+            <select
+              className="input-base"
+              value={selectedPlatform}
+              onChange={(e) => setSelectedPlatform(e.target.value)}
+              style={{ width: "100%", fontSize: "0.9rem", padding: "0.6rem" }}
+            >
+              <option value="all">{t("matches.all_platforms")}</option>
+              <option value="twitch">Twitch</option>
+              <option value="kick">Kick</option>
+              <option value="youtube">YouTube</option>
             </select>
           </div>
 
           {/* Search Input */}
           <div style={{ flex: "2 1 250px" }}>
             <label style={{ display: "block", fontSize: "0.75rem", color: "var(--muted)", marginBottom: "0.3rem" }}>
-              Buscar por equipo, torneo o caster
+              {t("matches.search_placeholder")}
             </label>
             <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
               <Search size={18} style={{ position: "absolute", left: "12px", color: "var(--muted)", pointerEvents: "none" }} />
               <input
                 type="text"
                 className="input-base"
-                placeholder="Buscar partido..."
+                placeholder={t("matches.search_match_placeholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ width: "100%", paddingLeft: "2.4rem", fontSize: "0.9rem", paddingRight: searchQuery ? "2rem" : "0.75rem" }}
@@ -1253,9 +1266,9 @@ export default function MatchesPage() {
             >
               <Swords size={30} color="var(--muted)" />
             </div>
-            <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.2rem" }}>No se encontraron matches</h3>
+            <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.2rem" }}>{t("matches.no_matches_title")}</h3>
             <p className="text-muted text-sm" style={{ maxWidth: "400px", margin: "0 auto" }}>
-              No hay partidos con rivales definidos que coincidan con los filtros seleccionados.
+              {t("matches.no_matches_desc")}
             </p>
           </div>
         ) : (
@@ -1373,7 +1386,7 @@ export default function MatchesPage() {
                             boxShadow: "0 0 8px #EF4444",
                           }}
                         />
-                        EN VIVO
+                        {t("matches.live_badge")}
                       </span>
                     ) : isCompleted ? (
                       <span
@@ -1390,7 +1403,7 @@ export default function MatchesPage() {
                           gap: "0.35rem",
                         }}
                       >
-                        <CheckCircle2 size={13} /> Finalizado
+                        <CheckCircle2 size={13} /> {t("matches.tab_completed")}
                       </span>
                     ) : (
                       <span
@@ -1406,7 +1419,7 @@ export default function MatchesPage() {
                           gap: "0.35rem",
                         }}
                       >
-                        <Clock size={13} /> Ronda {match.round || 1}
+                        <Clock size={13} /> {t("matches.round")} {match.round || 1}
                       </span>
                     )}
                   </div>
@@ -1431,7 +1444,7 @@ export default function MatchesPage() {
                         </span>
                         {scheduleInfo.timezone && !scheduleInfo.isTBD && (
                           <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>
-                            Hora local ({scheduleInfo.timezone})
+                            {t("matches.local_time_label", { timezone: scheduleInfo.timezone })}
                           </span>
                         )}
                       </div>
@@ -1439,12 +1452,12 @@ export default function MatchesPage() {
 
                     {canEditSchedule && (
                       <button
-                        className="btn btn-secondary text-xs"
-                        style={{ padding: "0.25rem 0.6rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                        className="btn-icon"
+                        style={{ padding: "0.35rem", display: "flex", alignItems: "center", justifyContent: "center" }}
                         onClick={() => handleOpenScheduleModal(match)}
-                        title="Editar fecha, hora y mapas del partido"
+                        title={t("matches.edit_schedule_tooltip")}
                       >
-                        <Edit size={12} /> Horario/Mapas
+                        <Edit size={13} />
                       </button>
                     )}
                   </div>
@@ -1598,31 +1611,44 @@ export default function MatchesPage() {
                       gap: "0.4rem",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem" }}>
                       <span style={{ fontSize: "0.75rem", color: "var(--muted)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                        <MapPin size={13} color="var(--primary)" /> Mapas a Jugar
+                        <MapIcon size={13} color="var(--primary)" /> {t("matches.manage_maps")}
                       </span>
 
-                      {match.map_veto_id ? (
-                        <button
-                          className="btn btn-secondary text-xs"
-                          style={{ padding: "0.2rem 0.5rem" }}
-                          onClick={() => router.push(`/map-veto/${match.map_veto_id}`)}
-                        >
-                          Ver Sala de Veto
-                        </button>
-                      ) : (
-                        (canAdmin || isAssignedCaster) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                        {canEditSchedule && (
                           <button
                             className="btn btn-secondary text-xs"
-                            style={{ padding: "0.2rem 0.5rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
-                            onClick={() => handleGenerateVeto(match)}
-                            title="Ir a crear la sesión de veto con estos equipos y maps precargados"
+                            style={{ padding: "0.2rem 0.55rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                            onClick={() => handleOpenChooseMapModal(match)}
+                            title={t("matches.choose_maps_tooltip")}
                           >
-                            <Shuffle size={12} /> Generar Veto
+                            <MapIcon size={12} /> {t("matches.choose_maps_btn")}
                           </button>
-                        )
-                      )}
+                        )}
+
+                        {match.map_veto_id ? (
+                          <button
+                            className="btn btn-secondary text-xs"
+                            style={{ padding: "0.2rem 0.5rem" }}
+                            onClick={() => router.push(`/map-veto/${match.map_veto_id}`)}
+                          >
+                            {t("matches.view_veto_room")}
+                          </button>
+                        ) : (
+                          (canAdmin || isAssignedCaster) && (
+                            <button
+                              className="btn btn-secondary text-xs"
+                              style={{ padding: "0.2rem 0.5rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                              onClick={() => handleGenerateVeto(match)}
+                              title={t("matches.generate_veto_tooltip")}
+                            >
+                              <Shuffle size={12} /> {t("matches.generate_veto_btn")}
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
 
                     {selectedMaps.length > 0 ? (
@@ -1646,112 +1672,119 @@ export default function MatchesPage() {
                       </div>
                     ) : (
                       <span style={{ fontSize: "0.8rem", color: "var(--muted)", fontStyle: "italic" }}>
-                        {match.map_veto_id ? "Veto de mapas en proceso..." : "Mapas pendientes de selección o veto"}
+                        {match.map_veto_id ? t("matches.veto_in_progress_text") : t("matches.pending_maps_text")}
                       </span>
                     )}
                   </div>
 
                   {/* Casters & Stream Access Section */}
-                  {hasCaster && (() => {
-                    const assignedCaster = assignedCasters[0];
-                    const casterDetails = assignedCaster?.casters;
-                    const streamInfo = resolveStreamInfo(assignedCaster?.stream_url, casterDetails);
-                    const casterName = casterDetails?.alias || casterDetails?.twitch_channel || casterDetails?.kick_channel || "Caster Oficial";
+                  {hasCaster && (
+                    <div
+                      style={{
+                        background: isLive ? "rgba(239, 68, 68, 0.08)" : "rgba(255, 255, 255, 0.03)",
+                        border: isLive ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: "8px",
+                        padding: "0.55rem 0.75rem",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.45rem",
+                      }}
+                    >
+                      {assignedCasters.map((assignedCaster: any, idx: number) => {
+                        const casterDetails = assignedCaster?.casters;
+                        const streamInfo = resolveStreamInfo(assignedCaster?.stream_url, casterDetails);
+                        const rawUser = extractPlatformUsername(
+                          assignedCaster?.stream_url ||
+                          casterDetails?.twitch_channel ||
+                          casterDetails?.kick_channel ||
+                          casterDetails?.youtube_channel ||
+                          casterDetails?.alias ||
+                          "Caster"
+                        );
 
-                    return (
-                      <div
-                        style={{
-                          background: isLive ? "rgba(239, 68, 68, 0.08)" : streamInfo.isKick ? "rgba(83, 252, 24, 0.08)" : streamInfo.isYoutube ? "rgba(239, 68, 68, 0.08)" : "rgba(145, 70, 255, 0.08)",
-                          border: isLive ? "1px solid rgba(239, 68, 68, 0.3)" : streamInfo.isKick ? "1px solid rgba(83, 252, 24, 0.3)" : streamInfo.isYoutube ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(145, 70, 255, 0.2)",
-                          borderRadius: "8px",
-                          padding: "0.6rem 0.75rem",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflow: "hidden" }}>
-                          {streamInfo.isKick ? (
-                            <KickIcon size={16} className="text-[#53FC18]" />
-                          ) : streamInfo.isYoutube ? (
-                            <YoutubeIcon size={16} className="text-[#EF4444]" />
-                          ) : (
-                            <TwitchIcon size={16} className="text-[#9146FF]" />
-                          )}
-                          <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                            <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--text-main)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              Caster:{" "}
-                              <a
-                                href={streamInfo.directUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ color: streamInfo.brandColor, textDecoration: "underline" }}
-                              >
-                                {casterName}
-                              </a>{" "}
-                              <span style={{ fontSize: "0.7rem", color: "var(--muted)", fontWeight: "normal" }}>({streamInfo.platformName})</span>
-                            </span>
-                            {!isLive && (
-                              <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>
-                                (Stream visible al iniciar el partido)
+                        const platformColor = streamInfo.isKick
+                          ? "#53FC18"
+                          : streamInfo.isYoutube
+                          ? "#EF4444"
+                          : streamInfo.isTwitch
+                          ? "#9146FF"
+                          : "var(--primary)";
+
+                        return (
+                          <div
+                            key={assignedCaster.id || idx}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <a
+                              href={streamInfo.directUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.45rem",
+                                fontWeight: "700",
+                                fontSize: "0.85rem",
+                                color: platformColor,
+                                textDecoration: "none",
+                                minWidth: 0,
+                              }}
+                              title={t("matches.open_channel", { platform: streamInfo.platformName })}
+                            >
+                              {streamInfo.isKick ? (
+                                <KickIcon size={18} className="text-[#53FC18]" />
+                              ) : streamInfo.isYoutube ? (
+                                <YoutubeIcon size={18} className="text-[#EF4444]" />
+                              ) : (
+                                <TwitchIcon size={18} className="text-[#9146FF]" />
+                              )}
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {rawUser}
                               </span>
+                            </a>
+
+                            {/* Stream Direct Access Button ONLY when match is in_progress (Live) */}
+                            {isLive && (
+                              <button
+                                className="btn"
+                                onClick={() =>
+                                  handleOpenStream(
+                                    streamInfo.directUrl || streamInfo.channel,
+                                    `${team1?.name} vs ${team2?.name}`,
+                                    rawUser,
+                                    streamInfo.platform
+                                  )
+                                }
+                                style={{
+                                  background: "#EF4444",
+                                  color: "#fff",
+                                  padding: "0.3rem 0.65rem",
+                                  fontSize: "0.75rem",
+                                  fontWeight: "bold",
+                                  borderRadius: "6px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                  boxShadow: "0 0 10px rgba(239, 68, 68, 0.4)",
+                                }}
+                              >
+                                <Play size={12} fill="#fff" /> {t("matches.watch_stream_btn")}
+                              </button>
                             )}
                           </div>
-                        </div>
-
-                        {/* Stream Direct Access Button ONLY when match is in_progress (Live) */}
-                        {isLive ? (
-                          <button
-                            className="btn"
-                            onClick={() =>
-                              handleOpenStream(
-                                streamInfo.directUrl || streamInfo.channel,
-                                `${team1?.name} vs ${team2?.name}`,
-                                casterName,
-                                streamInfo.platform
-                              )
-                            }
-                            style={{
-                              background: "#EF4444",
-                              color: "#fff",
-                              padding: "0.35rem 0.75rem",
-                              fontSize: "0.75rem",
-                              fontWeight: "bold",
-                              borderRadius: "6px",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                              border: "none",
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                              boxShadow: "0 0 10px rgba(239, 68, 68, 0.4)",
-                            }}
-                          >
-                            <Play size={12} fill="#fff" /> Ver Transmisión
-                          </button>
-                        ) : (
-                          <a
-                            href={streamInfo.directUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="btn btn-secondary text-xs"
-                            style={{
-                              padding: "0.3rem 0.5rem",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              whiteSpace: "nowrap",
-                              color: streamInfo.isKick ? "#53FC18" : streamInfo.isYoutube ? "#EF4444" : undefined,
-                              borderColor: streamInfo.isKick ? "rgba(83, 252, 24, 0.3)" : streamInfo.isYoutube ? "rgba(239, 68, 68, 0.3)" : undefined,
-                            }}
-                          >
-                            <ExternalLink size={12} /> Canal
-                          </a>
-                        )}
-                      </div>
-                    );
-                  })()}
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Actions & Organizer Admin / Caster Controls */}
                   <div
@@ -1774,7 +1807,7 @@ export default function MatchesPage() {
                             style={{ flex: 1, padding: "0.45rem 0.75rem" }}
                             onClick={() => handleOpenFinalizeModal(match)}
                           >
-                            <CheckCircle2 size={13} /> Finalizar Partido
+                            <CheckCircle2 size={13} /> {t("matches.finish_match_btn")}
                           </button>
                         )}
                         {(canAdmin || isAssignedCaster) && (
@@ -1783,7 +1816,7 @@ export default function MatchesPage() {
                             style={{ flex: canAdmin ? 0 : 1, padding: "0.45rem 0.75rem" }}
                             onClick={() => handleSetMatchStatus(match.id, "pending")}
                           >
-                            Pausar Transmisión
+                            {t("matches.pause_stream_btn")}
                           </button>
                         )}
                       </>
@@ -1796,121 +1829,112 @@ export default function MatchesPage() {
                         style={{ flex: 1, padding: "0.45rem 0.75rem" }}
                         onClick={() => handleOpenFinalizeModal(match)}
                       >
-                        <Edit size={13} /> Modificar Resultado
+                        <Edit size={13} /> {t("matches.modify_result_btn")}
                       </button>
                     )}
 
                     {/* If match is Upcoming / Pending */}
-                    {!isLive && !isCompleted && (
-                      <>
-                        {/* Caster / Claim controls */}
-                        {isCaster && (
-                          <>
-                            {hasCaster && assignedCasters.some((c: any) => c.caster_id === userCasterInfo?.id || c.casters?.user_id === session?.user?.id) ? (
-                              <>
-                                <button
-                                  className="btn text-xs"
-                                  style={{
-                                    flex: 1,
-                                    background: "rgba(239, 68, 68, 0.15)",
-                                    color: "#f87171",
-                                    border: "1px solid rgba(239, 68, 68, 0.3)",
-                                    padding: "0.45rem 0.75rem",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: "0.35rem",
-                                    fontWeight: "bold",
-                                  }}
-                                  onClick={() => handleSetMatchStatus(match.id, "in_progress")}
-                                >
-                                  <Radio size={13} color="#ef4444" /> Iniciar Transmisión
-                                </button>
-                                <button
-                                  className="btn btn-danger text-xs"
-                                  style={{ padding: "0.45rem 0.75rem" }}
-                                  onClick={() => handleUnlinkCast(match.id)}
-                                  title="Desvincular mi stream de este match"
-                                >
-                                  Quitar Cast
-                                </button>
-                              </>
-                            ) : (
+                    {!isLive && !isCompleted && (() => {
+                      const isUserAssigned = assignedCasters.some(
+                        (c: any) => c.caster_id === userCasterInfo?.id || c.casters?.user_id === session?.user?.id
+                      );
+                      const allowMultiple =
+                        match.tournaments?.allow_multiple_casters ??
+                        match.tournaments?.template_json?.allowMultipleCasters ??
+                        match.tournaments?.template_json?.allow_multiple_casters ??
+                        false;
+                      const canCast = isCaster || canAdmin;
+
+                      return (
+                        <>
+                          {isUserAssigned ? (
+                            <>
                               <button
-                                className="btn btn-primary"
+                                className="btn text-xs"
                                 style={{
                                   flex: 1,
-                                  fontSize: "0.85rem",
+                                  background: "rgba(239, 68, 68, 0.15)",
+                                  color: "#f87171",
+                                  border: "1px solid rgba(239, 68, 68, 0.3)",
                                   padding: "0.45rem 0.75rem",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  gap: "0.4rem",
+                                  gap: "0.35rem",
                                   fontWeight: "bold",
                                 }}
-                                onClick={() => {
-                                  const defaultUrl =
-                                    userLinkedAccounts[0]?.url ||
-                                    (userCasterInfo?.primary_platform === "kick" && userCasterInfo?.kick_channel ? `https://kick.com/${userCasterInfo.kick_channel}` : "") ||
-                                    (userCasterInfo?.kick_channel ? `https://kick.com/${userCasterInfo.kick_channel}` : "") ||
-                                    (userCasterInfo?.youtube_channel || "") ||
-                                    (userCasterInfo?.twitch_channel ? `https://twitch.tv/${userCasterInfo.twitch_channel}` : "") ||
-                                    "";
-                                  setAssignCasterModal({
-                                    isOpen: true,
-                                    matchId: match.id,
-                                    matchTitle: `${team1?.name} vs ${team2?.name}`,
-                                    customStreamUrl: defaultUrl,
-                                    startStreamNow: false,
-                                    isSubmitting: false,
-                                  });
-                                }}
+                                onClick={() => handleSetMatchStatus(match.id, "in_progress")}
                               >
-                                <Radio size={14} /> Castear
+                                <Radio size={13} color="#ef4444" /> {t("matches.start_stream_btn")}
                               </button>
-                            )}
-                          </>
-                        )}
-
-                        {/* Admin Start Transmission if not already handled by assigned caster */}
-                        {canAdmin && !isCaster && (
-                          <button
-                            className="btn text-xs"
-                            style={{
-                              flex: 1,
-                              background: "rgba(239, 68, 68, 0.15)",
-                              color: "#f87171",
-                              border: "1px solid rgba(239, 68, 68, 0.3)",
-                              padding: "0.45rem 0.75rem",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: "0.35rem",
-                              fontWeight: "bold",
-                            }}
-                            onClick={() => {
-                              if (!hasCaster) {
-                                toast.error(
-                                  "No se puede iniciar la transmisión sin un caster asignado al partido. Asigna un caster primero."
-                                );
+                              <button
+                                className="btn btn-danger text-xs"
+                                style={{ padding: "0.45rem 0.75rem" }}
+                                onClick={() => handleUnlinkCast(match.id)}
+                                title={t("matches.unlink_cast_tooltip")}
+                              >
+                                {t("matches.unlink_cast_btn")}
+                              </button>
+                            </>
+                          ) : canCast && (!hasCaster || allowMultiple || canAdmin) ? (
+                            <button
+                              className="btn btn-primary"
+                              style={{
+                                flex: 1,
+                                fontSize: "0.85rem",
+                                padding: "0.45rem 0.75rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "0.4rem",
+                                fontWeight: "bold",
+                              }}
+                              onClick={() => {
+                                const defaultUrl =
+                                  userLinkedAccounts[0]?.url ||
+                                  (userCasterInfo?.primary_platform === "kick" && userCasterInfo?.kick_channel ? `https://kick.com/${userCasterInfo.kick_channel}` : "") ||
+                                  (userCasterInfo?.kick_channel ? `https://kick.com/${userCasterInfo.kick_channel}` : "") ||
+                                  (userCasterInfo?.youtube_channel || "") ||
+                                  (userCasterInfo?.twitch_channel ? `https://twitch.tv/${userCasterInfo.twitch_channel}` : "") ||
+                                  "";
                                 setAssignCasterModal({
                                   isOpen: true,
                                   matchId: match.id,
                                   matchTitle: `${team1?.name} vs ${team2?.name}`,
-                                  customStreamUrl: "",
-                                  startStreamNow: true,
+                                  customStreamUrl: defaultUrl,
+                                  startStreamNow: false,
                                   isSubmitting: false,
                                 });
-                                return;
-                              }
-                              handleSetMatchStatus(match.id, "in_progress");
-                            }}
-                          >
-                            <Radio size={13} color="#ef4444" /> Iniciar Transmisión
-                          </button>
-                        )}
-                      </>
-                    )}
+                              }}
+                            >
+                              <Radio size={14} /> {t("matches.cast_match_btn")}
+                            </button>
+                          ) : null}
+
+                          {/* Admin Start Transmission if not already assigned */}
+                          {canAdmin && !isUserAssigned && hasCaster && (
+                            <button
+                              className="btn text-xs"
+                              style={{
+                                flex: 1,
+                                background: "rgba(239, 68, 68, 0.15)",
+                                color: "#f87171",
+                                border: "1px solid rgba(239, 68, 68, 0.3)",
+                                padding: "0.45rem 0.75rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "0.35rem",
+                                fontWeight: "bold",
+                              }}
+                              onClick={() => handleSetMatchStatus(match.id, "in_progress")}
+                            >
+                              <Radio size={13} color="#ef4444" /> {t("matches.start_stream_btn")}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -1965,7 +1989,7 @@ export default function MatchesPage() {
                   <TwitchIcon size={20} className="text-[#9146FF]" />
                 )}
                 <h3 style={{ margin: 0, fontSize: "1.2rem" }}>
-                  Transmisión en Vivo: {activeStreamModal.matchTitle}
+                  {t("matches.live_stream_title", { match: activeStreamModal.matchTitle })}
                 </h3>
               </div>
               <button
@@ -2038,7 +2062,7 @@ export default function MatchesPage() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem" }}>
               <span className="text-muted">
-                Narrado por: <strong>{activeStreamModal.casterName}</strong>
+                {t("matches.narrated_by", { caster: activeStreamModal.casterName })}
               </span>
               <a
                 href={
@@ -2058,14 +2082,14 @@ export default function MatchesPage() {
                   color: activeStreamModal.platform === "kick" ? "#53FC18" : activeStreamModal.platform === "youtube" ? "#EF4444" : "#C499FF",
                 }}
               >
-                <ExternalLink size={14} /> Abrir en {activeStreamModal.platform === "kick" ? "Kick" : activeStreamModal.platform === "youtube" ? "YouTube" : "Twitch"}
+                <ExternalLink size={14} /> {t("matches.open_in_platform", { platform: activeStreamModal.platform === "kick" ? "Kick" : activeStreamModal.platform === "youtube" ? "YouTube" : "Twitch" })}
               </a>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Schedule & Maps Modal */}
+      {/* Edit Schedule Modal (Time & Date only) */}
       {scheduleModal.isOpen && (
         <div
           style={{
@@ -2085,8 +2109,8 @@ export default function MatchesPage() {
             className="card"
             style={{
               width: "100%",
-              maxWidth: "520px",
-              padding: "2rem",
+              maxWidth: "440px",
+              padding: "1.75rem",
               display: "flex",
               flexDirection: "column",
               gap: "1.25rem",
@@ -2098,8 +2122,8 @@ export default function MatchesPage() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Edit size={20} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: "1.25rem" }}>Editar Horario y Mapas</h3>
+                <Clock size={20} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: "1.2rem" }}>{t("matches.edit_schedule_title")}</h3>
               </div>
               <button className="btn-icon" onClick={() => setScheduleModal((prev) => ({ ...prev, isOpen: false }))}>
                 <X size={20} />
@@ -2107,14 +2131,14 @@ export default function MatchesPage() {
             </div>
 
             <p className="text-muted text-sm" style={{ margin: 0 }}>
-              Partido: <strong>{scheduleModal.match?.team1?.name} vs {scheduleModal.match?.team2?.name}</strong>
+              {t("matches.round")}: <strong>{scheduleModal.match?.team1?.name} vs {scheduleModal.match?.team2?.name}</strong>
             </p>
 
             {/* Date & Time Picker */}
             <div style={{ display: "flex", gap: "1rem" }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                  Fecha (Hora Local)
+                  {t("matches.date_local_label")}
                 </label>
                 <input
                   type="date"
@@ -2126,7 +2150,7 @@ export default function MatchesPage() {
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                  Hora (Hora Local)
+                  {t("matches.time_local_label")}
                 </label>
                 <input
                   type="time"
@@ -2138,97 +2162,14 @@ export default function MatchesPage() {
               </div>
             </div>
 
-            {/* Map Selection from all available (official & custom) */}
-            <div>
-              <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                Mapas a Jugar (Oficiales y Customs)
-              </label>
-
-              {/* Map Chips */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.4rem",
-                  flexWrap: "wrap",
-                  maxHeight: "180px",
-                  overflowY: "auto",
-                  padding: "0.5rem",
-                  background: "rgba(0,0,0,0.3)",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-light)",
-                  marginBottom: "0.75rem",
-                }}
-              >
-                {availableMaps.map((mapItem: any) => {
-                  const mapName = mapItem.name;
-                  const isSelected = scheduleModal.selectedMaps.includes(mapName);
-                  return (
-                    <button
-                      key={mapName}
-                      type="button"
-                      className="btn text-xs"
-                      style={{
-                        padding: "0.25rem 0.5rem",
-                        background: isSelected ? "rgba(111, 175, 58, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                        border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border-light)",
-                        color: isSelected ? "var(--primary)" : "var(--muted)",
-                      }}
-                      onClick={() => {
-                        if (isSelected) {
-                          setScheduleModal({
-                            ...scheduleModal,
-                            selectedMaps: scheduleModal.selectedMaps.filter((m) => m !== mapName),
-                          });
-                        } else {
-                          setScheduleModal({
-                            ...scheduleModal,
-                            selectedMaps: [...scheduleModal.selectedMaps, mapName],
-                          });
-                        }
-                      }}
-                    >
-                      {mapName}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Custom Map text add */}
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <input
-                  type="text"
-                  className="input-base text-sm"
-                  placeholder="Agregar otro mapa por nombre..."
-                  value={scheduleModal.customMapInput}
-                  onChange={(e) => setScheduleModal({ ...scheduleModal, customMapInput: e.target.value })}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary text-sm"
-                  onClick={() => {
-                    if (scheduleModal.customMapInput.trim()) {
-                      setScheduleModal({
-                        ...scheduleModal,
-                        selectedMaps: [...scheduleModal.selectedMaps, scheduleModal.customMapInput.trim().toUpperCase()],
-                        customMapInput: "",
-                      });
-                    }
-                  }}
-                >
-                  Agregar
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => setScheduleModal((prev) => ({ ...prev, isOpen: false }))}
                 disabled={scheduleModal.isSubmitting}
               >
-                Cancelar
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -2236,126 +2177,35 @@ export default function MatchesPage() {
                 onClick={handleSaveSchedule}
                 disabled={scheduleModal.isSubmitting}
               >
-                {scheduleModal.isSubmitting ? "Guardando..." : "Guardar Cambios"}
+                {scheduleModal.isSubmitting ? t("common.saving") : t("matches.save_schedule_btn")}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Choose Map Modal */}
+      {chooseMapModal.isOpen && chooseMapModal.match && (
+        <ChooseMapModal
+          isOpen={chooseMapModal.isOpen}
+          match={chooseMapModal.match}
+          onClose={() => setChooseMapModal({ isOpen: false, match: null, isSaving: false })}
+          onSave={handleSaveChosenMaps}
+          isSaving={chooseMapModal.isSaving}
+          availableMaps={availableMaps}
+        />
+      )}
+
       {/* Finalize Match / Score Modal */}
-      {finalizeModal.isOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "1rem",
-          }}
-          onClick={() => setFinalizeModal((prev) => ({ ...prev, isOpen: false }))}
-        >
-          <div
-            className="card"
-            style={{
-              width: "100%",
-              maxWidth: "480px",
-              padding: "2rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "1.25rem",
-              background: "#14161A",
-              border: "1px solid var(--border-light)",
-              borderRadius: "12px",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <CheckCircle2 size={20} color="var(--success)" />
-                <h3 style={{ margin: 0, fontSize: "1.25rem" }}>Finalizar Partido</h3>
-              </div>
-              <button className="btn-icon" onClick={() => setFinalizeModal((prev) => ({ ...prev, isOpen: false }))}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <p className="text-muted text-sm" style={{ margin: 0 }}>
-              Ingresa el marcador oficial para registrar el resultado final del partido y avanzar las llaves.
-            </p>
-
-            <div style={{ display: "flex", gap: "1rem", alignItems: "center", justifyContent: "center", padding: "1rem", background: "rgba(0, 0, 0, 0.3)", borderRadius: "8px" }}>
-              <div style={{ textAlign: "center", flex: 1 }}>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
-                  {finalizeModal.match?.team1?.name}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  className="input-base"
-                  value={finalizeModal.score1}
-                  onChange={(e) => setFinalizeModal({ ...finalizeModal, score1: parseInt(e.target.value) || 0 })}
-                  style={{ width: "80px", textAlign: "center", fontSize: "1.2rem", fontWeight: "bold" }}
-                />
-              </div>
-
-              <span style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--muted)" }}>-</span>
-
-              <div style={{ textAlign: "center", flex: 1 }}>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
-                  {finalizeModal.match?.team2?.name}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  className="input-base"
-                  value={finalizeModal.score2}
-                  onChange={(e) => setFinalizeModal({ ...finalizeModal, score2: parseInt(e.target.value) || 0 })}
-                  style={{ width: "80px", textAlign: "center", fontSize: "1.2rem", fontWeight: "bold" }}
-                />
-              </div>
-            </div>
-
-            {/* Winner Selection */}
-            <div>
-              <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.4rem", color: "var(--muted)" }}>
-                Equipo Ganador
-              </label>
-              <select
-                className="input-base"
-                value={finalizeModal.winnerId}
-                onChange={(e) => setFinalizeModal({ ...finalizeModal, winnerId: e.target.value })}
-                style={{ width: "100%" }}
-              >
-                <option value={finalizeModal.match?.team1_id}>{finalizeModal.match?.team1?.name}</option>
-                <option value={finalizeModal.match?.team2_id}>{finalizeModal.match?.team2?.name}</option>
-              </select>
-            </div>
-
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setFinalizeModal((prev) => ({ ...prev, isOpen: false }))}
-                disabled={finalizeModal.isSubmitting}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleFinalizeMatch}
-                disabled={finalizeModal.isSubmitting}
-              >
-                {finalizeModal.isSubmitting ? "Guardando..." : "Confirmar Resultado"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {scoreModal.isOpen && scoreModal.match && (
+        <ScoreModal
+          match={scoreModal.match}
+          team1={scoreModal.team1}
+          team2={scoreModal.team2}
+          onClose={() => setScoreModal({ isOpen: false, match: null, team1: null, team2: null, isSaving: false })}
+          onSave={handleSaveScore}
+          isSaving={scoreModal.isSaving}
+        />
       )}
 
       {/* Modal to Assign Stream as Caster */}
@@ -2389,7 +2239,7 @@ export default function MatchesPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <Radio size={20} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: "1.15rem" }}>Transmitir Match</h3>
+                <h3 style={{ margin: 0, fontSize: "1.15rem" }}>{t("matches.broadcast_match_title")}</h3>
               </div>
               <button
                 className="btn-icon"
@@ -2402,14 +2252,14 @@ export default function MatchesPage() {
             <div style={{ padding: "0.75rem 1rem", background: "rgba(0,0,0,0.3)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)" }}>
               <div style={{ fontWeight: "bold", fontSize: "0.9rem" }}>{assignCasterModal.matchTitle}</div>
               <p className="text-muted" style={{ margin: "0.25rem 0 0", fontSize: "0.75rem" }}>
-                Selecciona la cuenta con la que transmitirás este partido oficial.
+                {t("matches.select_broadcast_account_desc")}
               </p>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <div>
                 <label className="text-muted" style={{ display: "block", fontSize: "0.75rem", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
-                  Cuenta de Transmisión
+                  {t("matches.broadcast_account_label")}
                 </label>
 
                 {/* 1-Click Selectable Linked Accounts */}
@@ -2478,14 +2328,14 @@ export default function MatchesPage() {
                   </div>
                 ) : (
                   <p className="text-muted" style={{ fontSize: "0.75rem", marginBottom: "0.5rem" }}>
-                    No tienes canales configurados en tu perfil de caster. Ingresa el enlace manualmente:
+                    {t("matches.no_caster_channels")}
                   </p>
                 )}
 
                 {/* Custom URL Input fallback */}
                 <details style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
                   <summary style={{ cursor: "pointer", marginBottom: "0.4rem", userSelect: "none" }}>
-                    {userLinkedAccounts.length > 0 ? "O ingresar un enlace personalizado..." : "Enlace personalizado"}
+                    {userLinkedAccounts.length > 0 ? t("matches.custom_url_link_label") : t("matches.custom_url_input_label")}
                   </summary>
                   <input
                     type="text"
@@ -2526,10 +2376,10 @@ export default function MatchesPage() {
                 />
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   <span style={{ fontSize: "0.85rem", fontWeight: "bold", color: "var(--text-main)" }}>
-                    Iniciar transmisión EN VIVO inmediatamente
+                    {t("matches.start_stream_now_checkbox")}
                   </span>
                   <span className="text-muted" style={{ fontSize: "0.7rem" }}>
-                    Marca el partido como en progreso para que los espectadores puedan ver el reproductor
+                    {t("matches.start_stream_now_hint")}
                   </span>
                 </div>
               </label>
@@ -2541,7 +2391,7 @@ export default function MatchesPage() {
                   onClick={() => setAssignCasterModal((prev) => ({ ...prev, isOpen: false }))}
                   disabled={assignCasterModal.isSubmitting}
                 >
-                  Cancelar
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="button"
@@ -2551,10 +2401,10 @@ export default function MatchesPage() {
                   style={{ fontWeight: "bold" }}
                 >
                   {assignCasterModal.isSubmitting
-                    ? "Procesando..."
+                    ? t("common.loading")
                     : assignCasterModal.startStreamNow
-                    ? "Iniciar Transmisión En Vivo"
-                    : "Vincular Transmisión"}
+                    ? t("matches.start_live_broadcast_btn")
+                    : t("matches.link_broadcast_btn")}
                 </button>
               </div>
             </div>

@@ -22,6 +22,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Radio,
+  ChevronDown,
+  Trash2,
+  UserX,
+  UserMinus,
+  UserCheck,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -40,6 +46,8 @@ import {
   InstagramIcon,
 } from "@/components/SocialIcons";
 import { normalizeLanguages, MAIN_CASTER_LANGUAGES } from "@/lib/language-helper";
+import MorphPlusMinusIcon from "@/components/MorphPlusMinusIcon";
+import { useTranslation } from "@/lib/i18n";
 
 // Helper to format YouTube URLs properly
 const formatYoutubeUrl = (channelOrUrl?: string | null) => {
@@ -106,6 +114,7 @@ let cachedTournamentDetails: Record<string, {
 }> = {};
 
 export default function TournamentDetails() {
+  const { t } = useTranslation();
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
@@ -130,6 +139,15 @@ export default function TournamentDetails() {
   const [swissRounds, setSwissRounds] = useState(0);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [communityBans, setCommunityBans] = useState<Record<string, any>>({});
+  const [openActionMenuTeamId, setOpenActionMenuTeamId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleCloseMenu = () => {
+      setOpenActionMenuTeamId(null);
+    };
+    window.addEventListener("click", handleCloseMenu);
+    return () => window.removeEventListener("click", handleCloseMenu);
+  }, []);
 
   // Tournament Casters State
   const [tournamentCasters, setTournamentCasters] = useState<any[]>([]);
@@ -371,12 +389,12 @@ export default function TournamentDetails() {
     const isRegen =
       tournament.bracket_status === "generated" ||
       tournament.bracket_status === "completed";
-      
+
     const isSwiss = templateJson.tournamentFormat === 'swiss';
     if (isSwiss) {
       setSwissRounds(Math.ceil(Math.log2(acceptedTeamsAll.length)));
     }
-    
+
     setBracketConfirmModal({ isOpen: true, isRegen });
   };
 
@@ -662,7 +680,9 @@ export default function TournamentDetails() {
           border: "1px solid var(--border-light)",
           borderRadius: "8px",
           marginBottom: "1rem",
-          overflow: "hidden",
+          overflow: isExpanded ? "visible" : "hidden",
+          position: "relative",
+          zIndex: openActionMenuTeamId === team.id ? 30 : 1,
           cursor: isParticipating ? "pointer" : "default",
           transition: "background 0.3s ease",
         }}
@@ -720,17 +740,17 @@ export default function TournamentDetails() {
                 {team.name}
               </h3>
               {team.status === "eliminated" && (
-                <span className="badge" style={{ background: "rgba(239, 68, 68, 0.15)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.3)", fontWeight: "bold", fontSize: "0.75rem", padding: "3px 8px" }}>
+                <span className="badge" style={{ background: "rgba(239, 68, 68, 0.15)", color: "#EF4444", border: "1px solid rgba(239, 68, 68, 0.3)", fontWeight: "bold", fontSize: "0.75rem", padding: "3px 8px" }}>
                   ELIMINADO
                 </span>
               )}
               {team.status === "disqualified" && (
-                <span className="badge" style={{ background: "rgba(239, 68, 68, 0.15)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.3)", fontWeight: "bold", fontSize: "0.75rem", padding: "3px 8px" }}>
+                <span className="badge" style={{ background: "rgba(249, 115, 22, 0.15)", color: "#F97316", border: "1px solid rgba(249, 115, 22, 0.3)", fontWeight: "bold", fontSize: "0.75rem", padding: "3px 8px" }}>
                   DESCALIFICADO
                 </span>
               )}
               {team.status === "withdrawn" && (
-                <span className="badge" style={{ background: "rgba(234, 179, 8, 0.15)", color: "#eab308", border: "1px solid rgba(234, 179, 8, 0.3)", fontWeight: "bold", fontSize: "0.75rem", padding: "3px 8px" }}>
+                <span className="badge" style={{ background: "rgba(234, 179, 8, 0.15)", color: "#EAB308", border: "1px solid rgba(234, 179, 8, 0.3)", fontWeight: "bold", fontSize: "0.75rem", padding: "3px 8px" }}>
                   RETIRADO (SALIDA PROPIA)
                 </span>
               )}
@@ -764,25 +784,34 @@ export default function TournamentDetails() {
           </div>
 
           {/* Expand Toggle */}
-          <div
-            style={{
-              padding: "1rem 1.5rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              flexShrink: 0,
-            }}
-          >
-            <span
+          {isParticipating && (
+            <div
               style={{
-                color: "var(--primary)",
-                fontSize: "0.9rem",
-                fontWeight: "bold",
+                padding: "1rem 1.5rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                flexShrink: 0,
               }}
             >
-              {isExpanded ? "Ocultar ▲" : "Ver Detalles ▼"}
-            </span>
-          </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "8px",
+                  background: isExpanded ? "rgba(239, 68, 68, 0.12)" : "rgba(111, 175, 58, 0.12)",
+                  border: isExpanded ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid rgba(111, 175, 58, 0.4)",
+                  boxShadow: isExpanded ? "0 0 10px rgba(239, 68, 68, 0.25)" : "0 0 10px rgba(111, 175, 58, 0.25)",
+                  transition: "all 0.25s ease",
+                }}
+              >
+                <MorphPlusMinusIcon isExpanded={isExpanded} size={18} spring="snappy" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Collapsible Area (Table + Actions) */}
@@ -792,8 +821,7 @@ export default function TournamentDetails() {
             flexDirection: "row",
             maxHeight: isExpanded ? "2000px" : "0px",
             opacity: isExpanded ? 1 : 0,
-            overflowX: "auto",
-            overflowY: "hidden",
+            overflow: isExpanded ? "visible" : "hidden",
             transition:
               "max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease, border 0.4s ease",
             borderTop: isExpanded ? "1px solid var(--border-light)" : "none",
@@ -803,7 +831,8 @@ export default function TournamentDetails() {
           <div
             style={{
               flex: 1,
-              minWidth: "600px",
+              minWidth: 0,
+              overflowX: "auto",
               display: "flex",
               flexDirection: "column",
               borderRight: "1px solid var(--border-light)",
@@ -813,6 +842,7 @@ export default function TournamentDetails() {
             <table
               style={{
                 width: "100%",
+                minWidth: "600px",
                 borderCollapse: "collapse",
                 textAlign: "left",
                 fontSize: "0.9rem",
@@ -970,7 +1000,7 @@ export default function TournamentDetails() {
                             >
                               {banInfo.bans?.length > 0 ? (
                                 banInfo.bans.map((b: any, i: number) => (
-                                  <a
+                                   <a
                                     key={`ban-${i}`}
                                     href={b.url}
                                     target="_blank"
@@ -1038,18 +1068,24 @@ export default function TournamentDetails() {
               flex: "0 0 200px",
               display: "flex",
               flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "stretch",
+              padding: "1.25rem 1rem",
+              gap: "0.65rem",
+              background: "rgba(0,0,0,0.2)",
+              position: "relative",
             }}
             onClick={(e) => isAccepted && e.stopPropagation()}
           >
             {team.status === "pending" && canManage && (
-              <>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%" }}>
                 <button
-                  className="btn text-success"
+                  type="button"
+                  className="btn btn-primary text-sm"
                   style={{
-                    flex: 1,
-                    borderRadius: 0,
-                    borderBottom: "1px solid var(--border-light)",
-                    background: "rgba(0,255,0,0.05)",
+                    width: "100%",
+                    padding: "0.6rem 0.85rem",
+                    fontWeight: 700,
                   }}
                   onClick={() => handleAcceptTeam(team.id)}
                 >
@@ -1057,13 +1093,13 @@ export default function TournamentDetails() {
                 </button>
                 {(tournament.bracket_status === "generated" || tournament.bracket_status === "completed") && (
                   <button
-                    className="btn text-warning text-xs"
+                    type="button"
+                    className="btn btn-secondary text-warning text-xs"
                     style={{
-                      flex: 1,
-                      borderRadius: 0,
-                      borderBottom: "1px solid var(--border-light)",
+                      width: "100%",
+                      padding: "0.5rem 0.6rem",
                       background: "rgba(234,179,8,0.08)",
-                      padding: "0.5rem 0.25rem",
+                      border: "1px solid rgba(234,179,8,0.25)",
                     }}
                     onClick={() => {
                       setTargetReplaceTeamId("");
@@ -1071,85 +1107,204 @@ export default function TournamentDetails() {
                     }}
                     title="Sustituir a un equipo retirado/descalificado en las llaves"
                   >
-                    ACEPTAR COMO REEMPLAZO
+                    Aceptar Reemplazo
                   </button>
                 )}
                 <button
-                  className="btn text-danger"
+                  type="button"
+                  className="btn btn-danger text-sm"
                   style={{
-                    flex: 1,
-                    borderRadius: 0,
-                    background: "rgba(255,0,0,0.05)",
+                    width: "100%",
+                    padding: "0.5rem 0.85rem",
                   }}
                   onClick={() => handleRejectOrDelete(team.id)}
                 >
                   RECHAZAR
                 </button>
-              </>
+              </div>
             )}
             {["accepted", "eliminated", "disqualified", "withdrawn"].includes(team.status) && (
-              <>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", width: "100%" }}>
                 {(canManage ||
                   (session?.user?.id === team.creator_id && !isLocked)) && (
                     <button
+                      type="button"
                       className="btn btn-secondary"
-                      style={{ flex: 1, borderRadius: 0, borderBottom: "1px solid var(--border-light)" }}
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem 0.85rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.45rem",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                      }}
                       onClick={() =>
                         router.push(`/tournament/${id}/team/${team.id}`)
                       }
                     >
-                      VER / EDITAR
+                      <Edit size={14} />
+                      <span>Editar Equipo</span>
                     </button>
                   )}
                 {canManage && (
-                  <div style={{ display: "flex", flexDirection: "column", background: "rgba(0,0,0,0.2)" }}>
-                    {team.status !== "accepted" && (
-                      <button
-                        className="btn text-success text-sm"
-                        style={{ borderRadius: 0, borderBottom: "1px solid var(--border-light)", background: "rgba(34,197,94,0.05)" }}
-                        onClick={() => handleUpdateTeamStatus(team.id, "accepted", "En Competencia")}
-                      >
-                        Reactivar
-                      </button>
-                    )}
-                    {team.status !== "eliminated" && (
-                      <button
-                        className="btn text-danger text-sm"
-                        style={{ borderRadius: 0, borderBottom: "1px solid var(--border-light)" }}
-                        onClick={() => setStatusConfirmModal({ isOpen: true, teamId: team.id, teamName: team.name, newStatus: "eliminated", statusLabel: "Eliminado" })}
-                      >
-                        Eliminado
-                      </button>
-                    )}
-                    {team.status !== "disqualified" && (
-                      <button
-                        className="btn text-danger text-sm"
-                        style={{ borderRadius: 0, borderBottom: "1px solid var(--border-light)" }}
-                        onClick={() => setStatusConfirmModal({ isOpen: true, teamId: team.id, teamName: team.name, newStatus: "disqualified", statusLabel: "Descalificado" })}
-                      >
-                        Descalificado
-                      </button>
-                    )}
-                    {team.status !== "withdrawn" && (
-                      <button
-                        className="btn text-warning text-sm"
-                        style={{ borderRadius: 0, borderBottom: "1px solid var(--border-light)" }}
-                        onClick={() => setStatusConfirmModal({ isOpen: true, teamId: team.id, teamName: team.name, newStatus: "withdrawn", statusLabel: "Retirado (Salida propia)" })}
-                      >
-                        Retirado
-                      </button>
-                    )}
+                  <div style={{ position: "relative", width: "100%" }}>
                     <button
-                      className="btn text-danger text-xs text-muted"
-                      style={{ borderRadius: 0, background: "rgba(255,0,0,0.08)", padding: "0.4rem" }}
-                      onClick={() => handleRejectOrDelete(team.id)}
-                      title="Eliminar registro completamente del torneo"
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "0.6rem 0.85rem",
+                        background: openActionMenuTeamId === team.id ? "rgba(255,255,255,0.1)" : "var(--bg-surface-elevated)",
+                        border: openActionMenuTeamId === team.id ? "1px solid var(--primary)" : "1px solid var(--border-light)",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        transition: "all 0.2s ease",
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenActionMenuTeamId((prev) => (prev === team.id ? null : team.id));
+                      }}
+                      title="Acciones y estado del equipo"
                     >
-                      Borrar Registro
+                      <span style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                        <Settings size={14} color="var(--primary)" />
+                        <span>Acciones</span>
+                      </span>
+                      <ChevronDown
+                        size={15}
+                        style={{
+                          transform: openActionMenuTeamId === team.id ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s ease",
+                        }}
+                      />
                     </button>
+
+                    {openActionMenuTeamId === team.id && (
+                      <div
+                        className="dropdown-menu"
+                        style={{
+                          position: "absolute",
+                          top: "calc(100% + 6px)",
+                          right: 0,
+                          left: 0,
+                          width: "100%",
+                          minWidth: "180px",
+                          zIndex: 9999,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div
+                          style={{
+                            padding: "0.45rem 0.85rem",
+                            fontSize: "0.7rem",
+                            fontWeight: "bold",
+                            color: "var(--muted)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            borderBottom: "1px solid var(--border-light)",
+                          }}
+                        >
+                          Estado del Equipo
+                        </div>
+
+                        {team.status !== "accepted" && (
+                          <button
+                            type="button"
+                            className="dropdown-item dropdown-item-success"
+                            onClick={() => {
+                              setOpenActionMenuTeamId(null);
+                              handleUpdateTeamStatus(team.id, "accepted", "En Competencia");
+                            }}
+                          >
+                            <UserCheck size={14} />
+                            <span>Reactivar</span>
+                          </button>
+                        )}
+
+                        {team.status !== "eliminated" && (
+                          <button
+                            type="button"
+                            className="dropdown-item dropdown-item-eliminated"
+                            onClick={() => {
+                              setOpenActionMenuTeamId(null);
+                              setStatusConfirmModal({
+                                isOpen: true,
+                                teamId: team.id,
+                                teamName: team.name,
+                                newStatus: "eliminated",
+                                statusLabel: "Eliminado",
+                              });
+                            }}
+                          >
+                            <UserX size={14} />
+                            <span>Eliminado</span>
+                          </button>
+                        )}
+
+                        {team.status !== "disqualified" && (
+                          <button
+                            type="button"
+                            className="dropdown-item dropdown-item-disqualified"
+                            onClick={() => {
+                              setOpenActionMenuTeamId(null);
+                              setStatusConfirmModal({
+                                isOpen: true,
+                                teamId: team.id,
+                                teamName: team.name,
+                                newStatus: "disqualified",
+                                statusLabel: "Descalificado",
+                              });
+                            }}
+                          >
+                            <Ban size={14} />
+                            <span>Descalificado</span>
+                          </button>
+                        )}
+
+                        {team.status !== "withdrawn" && (
+                          <button
+                            type="button"
+                            className="dropdown-item dropdown-item-withdrawn"
+                            onClick={() => {
+                              setOpenActionMenuTeamId(null);
+                              setStatusConfirmModal({
+                                isOpen: true,
+                                teamId: team.id,
+                                teamName: team.name,
+                                newStatus: "withdrawn",
+                                statusLabel: "Retirado (Salida propia)",
+                              });
+                            }}
+                          >
+                            <UserMinus size={14} />
+                            <span>Retirado</span>
+                          </button>
+                        )}
+
+                        <div className="dropdown-divider" />
+
+                        <button
+                          type="button"
+                          className="dropdown-item dropdown-item-danger"
+                          onClick={() => {
+                            setOpenActionMenuTeamId(null);
+                            handleRejectOrDelete(team.id);
+                          }}
+                          title="Eliminar registro completamente del torneo"
+                        >
+                          <Trash2 size={14} />
+                          <span>Borrar Registro</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </>
+              </div>
             )}
             {team.status === "pending" &&
               !canManage &&
@@ -1247,7 +1402,7 @@ export default function TournamentDetails() {
               onClick={() => setShowRulesModal(true)}
               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
             >
-              <FileText size={18} /> Ver Reglas
+              <FileText size={18} /> {t("tournament_detail.view_rules")}
             </button>
           )}
 
@@ -1267,7 +1422,7 @@ export default function TournamentDetails() {
               }}
               title="Copia este enlace para compartir el torneo."
             >
-              <LinkIcon size={20} /> Enlace del Torneo
+              <LinkIcon size={20} /> {t("tournament_detail.tournament_link_btn")}
             </button>
 
             {!isLocked && !isRegistrationFull && (
@@ -1286,7 +1441,7 @@ export default function TournamentDetails() {
                 }}
                 title="Copia este enlace y envíalo para que se inscriban."
               >
-                <LinkIcon size={20} /> Enlace de Inscripción
+                <LinkIcon size={20} /> {t("tournament_detail.register_link_btn")}
               </button>
             )}
           </div>
@@ -1313,7 +1468,7 @@ export default function TournamentDetails() {
             size={32}
             style={{ color: "var(--primary)", margin: "0 auto 1rem" }}
           />
-          <h3>Estado</h3>
+          <h3>{t("tournament_detail.status_label")}</h3>
           <p
             className={
               isLocked
@@ -1324,10 +1479,10 @@ export default function TournamentDetails() {
             }
           >
             {isLocked
-              ? "Torneo Cerrado"
-              : isRegistrationFull
-                ? "Registro Lleno (300)"
-                : "Registro Abierto"}
+              ? t("tournament_detail.status_closed")
+              : isFull
+                ? t("tournament_detail.status_full")
+                : t("tournament_detail.status_open")}
           </p>
         </div>
         <div style={{ flex: "1 1 200px", textAlign: "center" }}>
@@ -1335,11 +1490,7 @@ export default function TournamentDetails() {
             size={32}
             style={{ color: "var(--primary)", margin: "0 auto 1rem" }}
           />
-          <h3>
-            {templateJson.is1v1
-              ? "Jugadores Aceptados"
-              : "Equipos Aceptados"}
-          </h3>
+          <h3>{t("tournament_detail.stat_registered")}</h3>
           <p style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
             {acceptedTeamsAll.length} / {tournament.max_teams}
           </p>
@@ -1350,7 +1501,7 @@ export default function TournamentDetails() {
               size={32}
               style={{ color: "var(--muted)", margin: "0 auto 1rem" }}
             />
-            <h3>En Cola (Pendientes)</h3>
+            <h3>{t("tournament_detail.stat_pending")}</h3>
             <p style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
               {pendingTeams.length}
             </p>
@@ -1362,13 +1513,13 @@ export default function TournamentDetails() {
               size={32}
               style={{ color: "var(--primary)", margin: "0 auto 1rem" }}
             />
-            <h3>Exportar Datos</h3>
+            <h3>{t("tournament_detail.stat_export")}</h3>
             <button
               className="btn btn-secondary"
               onClick={handleExport}
               style={{ marginTop: "0.5rem" }}
             >
-              Descargar Excel
+              {t("tournament_detail.download_excel")}
             </button>
             <button
               className="btn btn-secondary"
@@ -1400,40 +1551,37 @@ export default function TournamentDetails() {
             onClick={() => setActiveTab("teams")}
           >
             {templateJson.is1v1
-              ? "Jugadores Inscritos"
-              : "Equipos Inscritos"}
+              ? t("tournament_detail.tab_teams_1v1")
+              : t("tournament_detail.tab_teams")}
           </button>
           {(canManage || !isLocked) && (
             <button
               className={`btn ${activeTab === "pending"
-                  ? "btn-primary"
-                  : "btn-secondary text-muted"
+                ? "btn-primary"
+                : "btn-secondary text-muted"
                 }`}
               style={{ borderRadius: "8px", border: "none" }}
               onClick={() => setActiveTab("pending")}
             >
-              Pendientes ({pendingTeams.length})
+              {t("tournament_detail.tab_pending", { count: pendingTeams.length })}
             </button>
           )}
           <button
             className={`btn ${activeTab === "bracket"
-                ? "btn-primary"
-                : "btn-secondary text-muted"
+              ? "btn-primary"
+              : "btn-secondary text-muted"
               }`}
             style={{ borderRadius: "8px", border: "none" }}
             onClick={() => setActiveTab("bracket")}
           >
-            Llaves (Bracket)
+            {t("tournament_detail.tab_bracket")}
           </button>
           <button
-            className={`btn ${activeTab === "casters"
-                ? "btn-primary"
-                : "btn-secondary text-muted"
-              }`}
-            style={{ borderRadius: "8px", border: "none", display: "flex", alignItems: "center", gap: "0.4rem" }}
+            className={`btn ${activeTab === "casters" ? "btn-primary" : "btn-secondary"}`}
+            style={{ fontSize: "0.85rem", padding: "0.5rem 0.85rem" }}
             onClick={() => setActiveTab("casters")}
           >
-            <Tv size={16} /> Casters Oficiales ({tournamentCasters.length})
+            {t("tournament_detail.tab_casters", { count: tournamentCasters.length })}
             {canManage && tournamentApplications.filter((a) => a.status === "pending").length > 0 && (
               <span
                 style={{
@@ -1445,7 +1593,7 @@ export default function TournamentDetails() {
                   fontWeight: "bold",
                 }}
               >
-                {tournamentApplications.filter((a) => a.status === "pending").length} pendiente(s)
+                {tournamentApplications.filter((a) => a.status === "pending").length} {t("tournament_detail.pending_badge")}
               </span>
             )}
           </button>
@@ -1462,7 +1610,7 @@ export default function TournamentDetails() {
               }}
             >
               <h2 style={{ margin: 0, color: "var(--primary)" }}>
-                Llaves del Torneo
+                {t("tournament_detail.bracket_title")}
               </h2>
               {canManage && (
                 <button
@@ -1478,41 +1626,41 @@ export default function TournamentDetails() {
                   }}
                 >
                   {isGeneratingBracket
-                    ? "Generando..."
+                    ? t("tournament_detail.generating")
                     : tournament.bracket_status === "generated" ||
                       tournament.bracket_status === "completed"
-                      ? "Regenerar Llaves"
-                      : "Generar Llaves"}
+                      ? t("tournament_detail.regen_bracket")
+                      : t("tournament_detail.generate_bracket")}
                 </button>
               )}
             </div>
 
             {tournament.bracket_status === "generated" ||
               tournament.bracket_status === "completed" ? (
-                templateJson.tournamentFormat === "swiss" ? (
-                  <SwissViewer
-                    matches={matches}
-                    teams={participatingTeamsAll as any}
-                    canManage={canManage}
-                    onMatchUpdated={refreshMatches}
-                    tournament={tournament as any}
-                  />
-                ) : (
-                  <BracketViewer
-                    matches={matches}
-                    teams={participatingTeamsAll as any}
-                    canManage={canManage}
-                    onMatchUpdated={refreshMatches}
-                    tournament={tournament as any}
-                  />
-                )
+              templateJson.tournamentFormat === "swiss" ? (
+                <SwissViewer
+                  matches={matches}
+                  teams={participatingTeamsAll as any}
+                  canManage={canManage}
+                  onMatchUpdated={refreshMatches}
+                  tournament={tournament as any}
+                />
+              ) : (
+                <BracketViewer
+                  matches={matches}
+                  teams={participatingTeamsAll as any}
+                  canManage={canManage}
+                  onMatchUpdated={refreshMatches}
+                  tournament={tournament as any}
+                />
+              )
             ) : (
               <div
                 className="card"
                 style={{ textAlign: "center", padding: "3rem" }}
               >
                 <p className="text-muted">
-                  Las llaves aún no han sido generadas.
+                  {t("tournament_detail.bracket_not_generated")}
                 </p>
               </div>
             )}
@@ -1536,8 +1684,8 @@ export default function TournamentDetails() {
                   className="input-base"
                   placeholder={
                     templateJson.is1v1
-                      ? "Buscar jugador por nombre..."
-                      : "Buscar equipo por nombre..."
+                      ? t("tournament_detail.search_player_placeholder")
+                      : t("tournament_detail.search_team_placeholder")
                   }
                   value={teamsSearch}
                   onChange={(e) => setTeamsSearch(e.target.value)}
@@ -1549,8 +1697,8 @@ export default function TournamentDetails() {
                     onClick={() => router.push(`/tournament/${id}/register`)}
                   >
                     {templateJson.is1v1
-                      ? "Registrarme"
-                      : "Registrar mi Equipo"}
+                      ? t("tournament_detail.register_player_btn")
+                      : t("tournament_detail.register_team_btn")}
                   </button>
                 )}
               </div>
@@ -1575,24 +1723,42 @@ export default function TournamentDetails() {
                 </button>
                 <button
                   type="button"
-                  className={`btn text-sm ${statusFilter === "eliminated" ? "btn-danger" : "btn-secondary text-danger"}`}
-                  style={{ padding: "4px 12px" }}
+                  className={`btn text-sm ${statusFilter === "eliminated" ? "" : "btn-secondary"}`}
+                  style={{
+                    padding: "4px 12px",
+                    background: statusFilter === "eliminated" ? "#EF4444" : "var(--bg-surface-elevated)",
+                    color: statusFilter === "eliminated" ? "#fff" : "#EF4444",
+                    border: statusFilter === "eliminated" ? "1px solid #EF4444" : "1px solid var(--border-light)",
+                    fontWeight: statusFilter === "eliminated" ? 600 : "normal",
+                  }}
                   onClick={() => setStatusFilter("eliminated")}
                 >
                   Eliminados ({participatingTeamsAll.filter(t => t.status === "eliminated").length})
                 </button>
                 <button
                   type="button"
-                  className={`btn text-sm ${statusFilter === "disqualified" ? "btn-danger" : "btn-secondary text-danger"}`}
-                  style={{ padding: "4px 12px" }}
+                  className={`btn text-sm ${statusFilter === "disqualified" ? "" : "btn-secondary"}`}
+                  style={{
+                    padding: "4px 12px",
+                    background: statusFilter === "disqualified" ? "#F97316" : "var(--bg-surface-elevated)",
+                    color: statusFilter === "disqualified" ? "#fff" : "#F97316",
+                    border: statusFilter === "disqualified" ? "1px solid #F97316" : "1px solid var(--border-light)",
+                    fontWeight: statusFilter === "disqualified" ? 600 : "normal",
+                  }}
                   onClick={() => setStatusFilter("disqualified")}
                 >
                   Descalificados ({participatingTeamsAll.filter(t => t.status === "disqualified").length})
                 </button>
                 <button
                   type="button"
-                  className={`btn text-sm ${statusFilter === "withdrawn" ? "btn-warning" : "btn-secondary"}`}
-                  style={{ padding: "4px 12px", color: statusFilter === "withdrawn" ? "#fff" : "#eab308" }}
+                  className={`btn text-sm ${statusFilter === "withdrawn" ? "" : "btn-secondary"}`}
+                  style={{
+                    padding: "4px 12px",
+                    background: statusFilter === "withdrawn" ? "#EAB308" : "var(--bg-surface-elevated)",
+                    color: statusFilter === "withdrawn" ? "#000" : "#EAB308",
+                    border: statusFilter === "withdrawn" ? "1px solid #EAB308" : "1px solid var(--border-light)",
+                    fontWeight: statusFilter === "withdrawn" ? 600 : "normal",
+                  }}
                   onClick={() => setStatusFilter("withdrawn")}
                 >
                   Retirados ({participatingTeamsAll.filter(t => t.status === "withdrawn").length})
@@ -1617,7 +1783,13 @@ export default function TournamentDetails() {
                 <button
                   className="btn btn-secondary text-sm"
                   onClick={handleToggleAllTeams}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}
                 >
+                  <MorphPlusMinusIcon
+                    isExpanded={participatingTeams.every((t) => expandedTeams[t.id])}
+                    size={14}
+                    spring="snappy"
+                  />
                   {participatingTeams.every((t) => expandedTeams[t.id])
                     ? "Contraer Todos"
                     : "Expandir Todos"}
@@ -1710,8 +1882,8 @@ export default function TournamentDetails() {
               }}
             >
               <div>
-                <h2 style={{ margin: 0, color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <Tv size={22} /> Casters Oficiales del Torneo
+                <h2 style={{ margin: 0, color: "var(--primary)" }}>
+                  Casters Oficiales del Torneo
                 </h2>
                 <p className="text-muted text-sm" style={{ margin: "0.25rem 0 0" }}>
                   Transmisiones autorizadas y comentaristas oficiales para este torneo.
@@ -1732,15 +1904,14 @@ export default function TournamentDetails() {
                           userTournamentApp.status === "approved"
                             ? "rgba(34, 197, 94, 0.15)"
                             : userTournamentApp.status === "rejected"
-                            ? "rgba(239, 68, 68, 0.15)"
-                            : "rgba(234, 179, 8, 0.15)",
-                        border: `1px solid ${
-                          userTournamentApp.status === "approved"
-                            ? "rgba(34, 197, 94, 0.3)"
-                            : userTournamentApp.status === "rejected"
+                              ? "rgba(239, 68, 68, 0.15)"
+                              : "rgba(234, 179, 8, 0.15)",
+                        border: `1px solid ${userTournamentApp.status === "approved"
+                          ? "rgba(34, 197, 94, 0.3)"
+                          : userTournamentApp.status === "rejected"
                             ? "rgba(239, 68, 68, 0.3)"
                             : "rgba(234, 179, 8, 0.3)"
-                        }`,
+                          }`,
                       }}
                     >
                       {userTournamentApp.status === "approved" ? (
@@ -1758,16 +1929,26 @@ export default function TournamentDetails() {
                             userTournamentApp.status === "approved"
                               ? "var(--success)"
                               : userTournamentApp.status === "rejected"
-                              ? "var(--danger)"
-                              : "var(--warning)",
+                                ? "var(--danger)"
+                                : "var(--warning)",
                         }}
                       >
                         {userTournamentApp.status === "approved"
                           ? "Caster Oficial Aprobado"
                           : userTournamentApp.status === "rejected"
-                          ? "Solicitud Rechazada"
-                          : "Solicitud en Revisión"}
+                            ? "Solicitud Rechazada"
+                            : "Solicitud en Revisión"}
                       </span>
+                    </div>
+                  ) : canManage ? (
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => setIsCasterModalOpen(true)}
+                        style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+                      >
+                        Unirme como Caster Oficial
+                      </button>
                     </div>
                   ) : isGlobalCaster ? (
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
@@ -1805,7 +1986,7 @@ export default function TournamentDetails() {
                         borderRadius: "8px",
                       }}
                     >
-                      <Tv size={16} /> Postularme como Caster
+                      <Radio size={16} /> Postularme como Caster
                     </button>
                   )}
                 </div>
@@ -1822,21 +2003,13 @@ export default function TournamentDetails() {
                   background: "rgba(0, 0, 0, 0.2)",
                 }}
               >
-                <Tv size={36} style={{ color: "var(--muted)", margin: "0 auto 1rem" }} />
+                <Radio size={32} style={{ color: "var(--primary)", margin: "0 auto 1rem", opacity: 0.8 }} />
                 <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.15rem" }}>
                   Aún no hay casters oficiales registrados para este torneo
                 </h3>
-                <p className="text-muted text-sm" style={{ maxWidth: "450px", margin: "0 auto 1.5rem" }}>
-                  Si eres creador de contenido o comentarista, puedes postularte para transmitir y comentar los partidos de este torneo.
+                <p className="text-muted text-sm" style={{ maxWidth: "450px", margin: "0 auto" }}>
+                  Si eres creador de contenido o comentarista, puedes postularte para transmitir y comentar los partidos de este torneo usando el botón superior.
                 </p>
-                {session?.user && !userTournamentApp && (
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => setIsCasterModalOpen(true)}
-                  >
-                    Enviar Postulación de Caster
-                  </button>
-                )}
               </div>
             ) : (
               <div
@@ -2052,165 +2225,165 @@ export default function TournamentDetails() {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                     {tournamentApplications.map((app) => (
-                    <div
-                      key={app.id}
-                      style={{
-                        padding: "1rem",
-                        borderRadius: "8px",
-                        background: "rgba(255, 255, 255, 0.03)",
-                        border: "1px solid var(--border-light)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: "1rem",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: "250px" }}>
-                        <div
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            borderRadius: "50%",
-                            background: "rgba(145, 70, 255, 0.2)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#C499FF",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {app.alias?.slice(0, 2).toUpperCase() || "CA"}
-                        </div>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <span style={{ fontWeight: "bold", fontSize: "0.95rem" }}>{app.alias}</span>
-                            <span
-                              style={{
-                                fontSize: "0.75rem",
-                                padding: "0.1rem 0.4rem",
-                                borderRadius: "4px",
-                                background:
-                                  app.status === "approved"
-                                    ? "rgba(34, 197, 94, 0.2)"
-                                    : app.status === "rejected"
-                                    ? "rgba(239, 68, 68, 0.2)"
-                                    : "rgba(234, 179, 8, 0.2)",
-                                color:
-                                  app.status === "approved"
-                                    ? "var(--success)"
-                                    : app.status === "rejected"
-                                    ? "var(--danger)"
-                                    : "var(--warning)",
-                              }}
-                            >
-                              {app.status === "approved"
-                                ? "Aprobado"
-                                : app.status === "rejected"
-                                ? "Rechazado"
-                                : "Pendiente"}
-                            </span>
+                      <div
+                        key={app.id}
+                        style={{
+                          padding: "1rem",
+                          borderRadius: "8px",
+                          background: "rgba(255, 255, 255, 0.03)",
+                          border: "1px solid var(--border-light)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "1rem",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: "250px" }}>
+                          <div
+                            style={{
+                              width: "40px",
+                              height: "40px",
+                              borderRadius: "50%",
+                              background: "rgba(145, 70, 255, 0.2)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#C499FF",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {app.alias?.slice(0, 2).toUpperCase() || "CA"}
                           </div>
-                          <p className="text-muted text-xs" style={{ margin: "0.2rem 0 0" }}>
-                            Usuario: {app.users?.name || app.users?.email}
-                          </p>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span style={{ fontWeight: "bold", fontSize: "0.95rem" }}>{app.alias}</span>
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.1rem 0.4rem",
+                                  borderRadius: "4px",
+                                  background:
+                                    app.status === "approved"
+                                      ? "rgba(34, 197, 94, 0.2)"
+                                      : app.status === "rejected"
+                                        ? "rgba(239, 68, 68, 0.2)"
+                                        : "rgba(234, 179, 8, 0.2)",
+                                  color:
+                                    app.status === "approved"
+                                      ? "var(--success)"
+                                      : app.status === "rejected"
+                                        ? "var(--danger)"
+                                        : "var(--warning)",
+                                }}
+                              >
+                                {app.status === "approved"
+                                  ? "Aprobado"
+                                  : app.status === "rejected"
+                                    ? "Rechazado"
+                                    : "Pendiente"}
+                              </span>
+                            </div>
+                            <p className="text-muted text-xs" style={{ margin: "0.2rem 0 0" }}>
+                              Usuario: {app.users?.name || app.users?.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: "0.85rem", flexWrap: "wrap", alignItems: "center" }}>
+                          {app.twitch_channel && (
+                            <a
+                              href={`https://twitch.tv/${extractPlatformUsername(app.twitch_channel)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                color: "#9146FF",
+                                textDecoration: "none",
+                                fontWeight: "bold",
+                                fontSize: "0.85rem",
+                                background: "transparent",
+                              }}
+                              title={`Twitch: ${extractPlatformUsername(app.twitch_channel)}`}
+                            >
+                              <TwitchIcon size={14} color="#9146FF" />
+                              <span>{extractPlatformUsername(app.twitch_channel)}</span>
+                            </a>
+                          )}
+                          {app.kick_channel && (
+                            <a
+                              href={`https://kick.com/${extractPlatformUsername(app.kick_channel)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                color: "#53FC18",
+                                textDecoration: "none",
+                                fontWeight: "bold",
+                                fontSize: "0.85rem",
+                                background: "transparent",
+                              }}
+                              title={`Kick: ${extractPlatformUsername(app.kick_channel)}`}
+                            >
+                              <KickIcon size={14} color="#53FC18" />
+                              <span>{extractPlatformUsername(app.kick_channel)}</span>
+                            </a>
+                          )}
+                          {app.youtube_channel && (
+                            <a
+                              href={formatYoutubeUrl(app.youtube_channel)}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                color: "#FF0000",
+                                textDecoration: "none",
+                                fontWeight: "bold",
+                                fontSize: "0.85rem",
+                                background: "transparent",
+                              }}
+                              title={`YouTube: ${extractPlatformUsername(app.youtube_channel)}`}
+                            >
+                              <YoutubeIcon size={14} color="#FF0000" />
+                              <span>{extractPlatformUsername(app.youtube_channel)}</span>
+                            </a>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                          {app.status !== "approved" && (
+                            <button
+                              className="btn text-xs"
+                              style={{ background: "rgba(34, 197, 94, 0.2)", color: "var(--success)", border: "1px solid rgba(34, 197, 94, 0.4)", padding: "0.35rem 0.75rem" }}
+                              onClick={() => handleReviewCaster(app.id, "approve")}
+                            >
+                              Aprobar
+                            </button>
+                          )}
+                          {app.status !== "rejected" && (
+                            <button
+                              className="btn text-xs"
+                              style={{ background: "rgba(239, 68, 68, 0.2)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.4)", padding: "0.35rem 0.75rem" }}
+                              onClick={() => handleReviewCaster(app.id, "reject")}
+                            >
+                              Rechazar
+                            </button>
+                          )}
                         </div>
                       </div>
-
-                      <div style={{ display: "flex", gap: "0.85rem", flexWrap: "wrap", alignItems: "center" }}>
-                        {app.twitch_channel && (
-                          <a
-                            href={`https://twitch.tv/${extractPlatformUsername(app.twitch_channel)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                              color: "#9146FF",
-                              textDecoration: "none",
-                              fontWeight: "bold",
-                              fontSize: "0.85rem",
-                              background: "transparent",
-                            }}
-                            title={`Twitch: ${extractPlatformUsername(app.twitch_channel)}`}
-                          >
-                            <TwitchIcon size={14} color="#9146FF" />
-                            <span>{extractPlatformUsername(app.twitch_channel)}</span>
-                          </a>
-                        )}
-                        {app.kick_channel && (
-                          <a
-                            href={`https://kick.com/${extractPlatformUsername(app.kick_channel)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                              color: "#53FC18",
-                              textDecoration: "none",
-                              fontWeight: "bold",
-                              fontSize: "0.85rem",
-                              background: "transparent",
-                            }}
-                            title={`Kick: ${extractPlatformUsername(app.kick_channel)}`}
-                          >
-                            <KickIcon size={14} color="#53FC18" />
-                            <span>{extractPlatformUsername(app.kick_channel)}</span>
-                          </a>
-                        )}
-                        {app.youtube_channel && (
-                          <a
-                            href={formatYoutubeUrl(app.youtube_channel)}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                              color: "#FF0000",
-                              textDecoration: "none",
-                              fontWeight: "bold",
-                              fontSize: "0.85rem",
-                              background: "transparent",
-                            }}
-                            title={`YouTube: ${extractPlatformUsername(app.youtube_channel)}`}
-                          >
-                            <YoutubeIcon size={14} color="#FF0000" />
-                            <span>{extractPlatformUsername(app.youtube_channel)}</span>
-                          </a>
-                        )}
-                      </div>
-
-                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                        {app.status !== "approved" && (
-                          <button
-                            className="btn text-xs"
-                            style={{ background: "rgba(34, 197, 94, 0.2)", color: "var(--success)", border: "1px solid rgba(34, 197, 94, 0.4)", padding: "0.35rem 0.75rem" }}
-                            onClick={() => handleReviewCaster(app.id, "approve")}
-                          >
-                            Aprobar
-                          </button>
-                        )}
-                        {app.status !== "rejected" && (
-                          <button
-                            className="btn text-xs"
-                            style={{ background: "rgba(239, 68, 68, 0.2)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.4)", padding: "0.35rem 0.75rem" }}
-                            onClick={() => handleReviewCaster(app.id, "reject")}
-                          >
-                            Rechazar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       <ConfirmModal
@@ -2304,9 +2477,13 @@ export default function TournamentDetails() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                <Tv size={22} color="#9146FF" />
+                <Radio size={20} color="var(--primary)" />
                 <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "bold" }}>
-                  {isGlobalCaster ? "Postulación de Caster al Torneo" : "Rol de Caster Requerido"}
+                  {canManage
+                    ? "Transmitir mi Torneo (Caster Oficial)"
+                    : isGlobalCaster
+                      ? "Postulación de Caster al Torneo"
+                      : "Rol de Caster Requerido"}
                 </h3>
               </div>
               <button className="btn-icon" onClick={() => setIsCasterModalOpen(false)}>
@@ -2314,7 +2491,7 @@ export default function TournamentDetails() {
               </button>
             </div>
 
-            {!isGlobalCaster ? (
+            {!isGlobalCaster && !canManage ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                 <div
                   style={{
@@ -2374,7 +2551,15 @@ export default function TournamentDetails() {
                     color: "var(--text-main)",
                   }}
                 >
-                  Tienes el rol de <strong>Caster Oficial ({globalCasterProfile?.alias || session?.user?.name})</strong>. Tus datos han sido cargados automáticamente.
+                  {canManage ? (
+                    <>
+                      Eres <strong>administrador/organizador</strong> de este torneo. Puedes vincular tu canal y castear tu torneo directamente sin necesidad de postulación global previa.
+                    </>
+                  ) : (
+                    <>
+                      Tienes el rol de <strong>Caster Oficial ({globalCasterProfile?.alias || session?.user?.name})</strong>. Tus datos han sido cargados automáticamente.
+                    </>
+                  )}
                 </div>
 
                 <div>
@@ -2563,14 +2748,16 @@ export default function TournamentDetails() {
                                 setCasterForm({ ...casterForm, languages: currentLangs.filter((l: string) => l !== lang) });
                               }
                             }}
-                            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
+                            style={{ display: "none" }}
                           />
                           <div
                             style={{
-                              width: "14px",
-                              height: "14px",
+                              width: "16px",
+                              height: "16px",
                               borderRadius: "4px",
-                              border: isChecked ? "1px solid var(--primary)" : "1px solid rgba(255, 255, 255, 0.2)",
+                              border: isChecked
+                                ? "1px solid var(--primary)"
+                                : "1px solid rgba(255, 255, 255, 0.3)",
                               background: isChecked ? "var(--primary)" : "rgba(0, 0, 0, 0.2)",
                               display: "flex",
                               alignItems: "center",
@@ -2628,7 +2815,11 @@ export default function TournamentDetails() {
                     className="btn btn-primary"
                     disabled={isSubmittingCaster}
                   >
-                    {isSubmittingCaster ? "Enviando..." : "Enviar Postulación"}
+                    {isSubmittingCaster
+                      ? "Enviando..."
+                      : canManage
+                        ? "Confirmar como Caster Oficial"
+                        : "Enviar Postulación"}
                   </button>
                 </div>
               </form>
@@ -2643,17 +2834,17 @@ export default function TournamentDetails() {
         message={
           <div>
             <p>
-            {bracketConfirmModal.isRegen
-              ? "¿Estás seguro de REGENERAR las llaves? Esto ELIMINARÁ el progreso actual de todas las partidas y mezclará los equipos de nuevo."
-              : "¿Estás seguro de generar las llaves? Esto no se puede deshacer y asignará los equipos aleatoriamente."}
+              {bracketConfirmModal.isRegen
+                ? "¿Estás seguro de REGENERAR las llaves? Esto ELIMINARÁ el progreso actual de todas las partidas y mezclará los equipos de nuevo."
+                : "¿Estás seguro de generar las llaves? Esto no se puede deshacer y asignará los equipos aleatoriamente."}
             </p>
             {templateJson.tournamentFormat === "swiss" && (
               <div style={{ marginTop: "1rem" }}>
                 <label className="text-sm font-medium mb-1 block">Número de Rondas (Swiss Stage):</label>
-                <input 
-                  type="number" 
-                  className="input-base" 
-                  value={swissRounds} 
+                <input
+                  type="number"
+                  className="input-base"
+                  value={swissRounds}
                   onChange={(e) => setSwissRounds(parseInt(e.target.value) || 1)}
                   min="1"
                   style={{ width: "100px" }}

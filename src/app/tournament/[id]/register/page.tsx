@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { Country, getAvailableCountries } from "@/lib/countries";
+import { useTranslation } from "@/lib/i18n";
 
 interface Tournament {
   id: string;
@@ -35,6 +36,7 @@ export default function RegisterTeam() {
   const id = params.id as string;
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { t } = useTranslation();
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +65,7 @@ export default function RegisterTeam() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      toast.error("Debes iniciar sesión para registrar un equipo.");
+      toast.error(t("tournament_create.error_login_required"));
       router.push("/");
     } else if (status === "authenticated" && id) {
       fetchData();
@@ -98,7 +100,7 @@ export default function RegisterTeam() {
     if (data) {
       setTournament(data);
       if (data.status === "locked") {
-        toast.error("Las inscripciones para este torneo están cerradas.");
+        toast.error(t("tournament_register.locked_error"));
         router.push(`/tournament/${id}`);
         return;
       }
@@ -110,7 +112,7 @@ export default function RegisterTeam() {
         .eq("tournament_id", id);
         
       if ((count || 0) >= 300) {
-        toast.error("Se ha alcanzado el límite máximo de registros (300) para este torneo.");
+        toast.error(t("tournament_register.max_limit_error"));
         router.push(`/tournament/${id}`);
         return;
       }
@@ -127,7 +129,7 @@ export default function RegisterTeam() {
 
   const loadFriends = async (index: number) => {
     setActivePlayerIndex(index);
-    setFriendsSearch(""); // Reset search on open
+    setFriendsSearch("");
     setShowFriendsModal(true);
     if (friends.length === 0) {
       setIsFriendsLoading(true);
@@ -150,7 +152,7 @@ export default function RegisterTeam() {
   const selectFriend = (friend: Friend) => {
     if (activePlayerIndex === -1) {
       if (players.length >= (tournament?.template_json?.maxPlayers || 8)) {
-        toast.error("El equipo está lleno.");
+        toast.error(t("tournament_register.team_full"));
         setShowFriendsModal(false);
         return;
       }
@@ -190,7 +192,7 @@ export default function RegisterTeam() {
     const is1v1 = tournament?.template_json?.is1v1;
     const finalTeamName = is1v1 ? players[0]?.name : teamName;
 
-    if (!finalTeamName) return toast.error(is1v1 ? "Debes ingresar tu nombre." : "El equipo debe tener un nombre.");
+    if (!finalTeamName) return toast.error(is1v1 ? t("tournament_register.error_enter_name") : t("tournament_register.error_team_name_required"));
     for (const p of players) {
       if (!p.name || !p.steam_id_64) return toast.error(`El jugador ${p.name || "(sin nombre)"} debe tener nombre y URL de Steam.`);
     }
@@ -202,14 +204,14 @@ export default function RegisterTeam() {
       const { data: tData } = await supabase.from("tournaments").select("status").eq("id", id).single();
       if (tData?.status === "locked") {
         setIsSubmitting(false);
-        return toast.error("Las inscripciones para este torneo acaban de cerrar.");
+        return toast.error(t("tournament_register.locked_error"));
       }
 
       // Re-verify real-time total registrations limit
       const { count } = await supabase.from("teams").select("*", { count: "exact", head: true }).eq("tournament_id", id);
       if ((count || 0) >= 300) {
         setIsSubmitting(false);
-        return toast.error("Se ha alcanzado el límite máximo de registros (300) para este torneo.");
+        return toast.error(t("tournament_register.max_limit_error"));
       }
 
       // 1. Upload Logo if exists
@@ -217,7 +219,7 @@ export default function RegisterTeam() {
       if (logoFile) {
         const fileExt = logoFile.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const { error: uploadError, data: uploadData } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from("team-logos")
           .upload(fileName, logoFile);
 
@@ -246,7 +248,6 @@ export default function RegisterTeam() {
       }
 
       // 3. Insert Team
-      // Encode tag, countries and teamAnswers into logo_url
       let finalLogo = JSON.stringify({
         url: logoUrl || "",
         tag: teamTag,
@@ -283,7 +284,7 @@ export default function RegisterTeam() {
       const { error: membersError } = await supabase.from("team_members").insert(membersToInsert);
       if (membersError) throw new Error("Error registrando los jugadores.");
 
-      toast.success("¡Equipo registrado con éxito!");
+      toast.success(t("tournament_register.registration_success"));
       router.push(`/tournament/${id}`);
 
     } catch (err: any) {
@@ -294,22 +295,22 @@ export default function RegisterTeam() {
     }
   };
 
-  if ((status === "loading" || isLoading) && !tournament) return <LoadingSpinner text="Cargando..." fullHeight={true} />;
-  if (!tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>Torneo no encontrado.</div>;
+  if ((status === "loading" || isLoading) && !tournament) return <LoadingSpinner fullHeight={true} />;
+  if (!tournament) return <div className="container" style={{ textAlign: "center", marginTop: "10vh" }}>{t("tournament_detail.tournament_not_found")}</div>;
 
   const tpl = tournament.template_json;
 
   return (
     <div className="container" style={{ paddingBottom: "4rem" }}>
       <header style={{ marginBottom: "2rem", textAlign: "center" }}>
-        <h1>{tpl?.is1v1 ? "Registro Individual" : "Registro de Equipo"}</h1>
-        <p className="text-muted">Inscribiendo a: {tournament.name}</p>
+        <h1>{tpl?.is1v1 ? t("tournament_register.title_1v1") : t("tournament_register.title_team")}</h1>
+        <p className="text-muted">{t("tournament_register.enrolling_in")}: {tournament.name}</p>
       </header>
 
       {!hasSteamLinked && !tpl?.is1v1 && (
         <div style={{ background: "rgba(250, 204, 21, 0.1)", border: "1px solid var(--warning)", padding: "1rem", borderRadius: "8px", marginBottom: "2rem", color: "var(--warning)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-          <span>⚠️ Si deseas registrar jugadores fácilmente desde tu lista de amigos de Steam, necesitas vincular tu cuenta.</span>
-          <button type="button" className="btn btn-secondary" onClick={() => router.push("/settings")}>Vincular Steam</button>
+          <span>{t("tournament_register.steam_warning")}</span>
+          <button type="button" className="btn btn-secondary" onClick={() => router.push("/settings")}>{t("tournament_register.link_steam_btn")}</button>
         </div>
       )}
 
@@ -317,30 +318,30 @@ export default function RegisterTeam() {
         {/* TEAM DETAILS */}
         {!tpl?.is1v1 && (
         <div className="glass-panel" style={{ padding: "2rem" }}>
-          <h2 style={{ marginBottom: "1.5rem", color: "var(--primary)" }}>Detalles del Equipo</h2>
+          <h2 style={{ marginBottom: "1.5rem", color: "var(--primary)" }}>{t("tournament_register.team_details")}</h2>
           
           <div className="flex-col gap-4">
             <div>
-              <label className="text-sm text-muted font-medium block mb-2">Nombre del Equipo *</label>
+              <label className="text-sm text-muted font-medium block mb-2">{t("tournament_register.team_name_label")} *</label>
               <input required={!tpl?.is1v1} className="input-base" value={teamName} onChange={e => setTeamName(e.target.value)} />
             </div>
             
             <div>
-              <label className="text-sm text-muted font-medium block mb-2">Logo del Equipo (Opcional)</label>
+              <label className="text-sm text-muted font-medium block mb-2">{t("tournament_register.team_logo_label")}</label>
               <label className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                 <Upload size={18} />
-                {logoFile ? logoFile.name : "Subir Imagen"}
+                {logoFile ? logoFile.name : t("tournament_create.upload_image")}
                 <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setLogoFile(e.target.files?.[0] || null)} />
               </label>
             </div>
 
             <div>
-              <label className="text-sm text-muted font-medium block mb-2">Tag del Equipo (Opcional)</label>
+              <label className="text-sm text-muted font-medium block mb-2">{t("tournament_register.team_tag_label")}</label>
               <input className="input-base" placeholder="Ej: ^" value={teamTag} onChange={e => setTeamTag(e.target.value)} />
             </div>
 
             <div style={{ position: "relative" }}>
-              <label className="text-sm text-muted font-medium block mb-2">Países del Equipo (Opcional)</label>
+              <label className="text-sm text-muted font-medium block mb-2">{t("tournament_register.team_countries_label")}</label>
               
               {/* Selected Countries Tags */}
               {teamCountries.length > 0 && (
@@ -359,7 +360,7 @@ export default function RegisterTeam() {
 
               <input 
                 className="input-base" 
-                placeholder="Buscar y añadir país..." 
+                placeholder={t("tournament_register.search_country_placeholder")} 
                 value={countrySearch} 
                 onChange={e => {
                   setCountrySearch(e.target.value);
@@ -383,14 +384,13 @@ export default function RegisterTeam() {
                           setShowCountryDropdown(false);
                         }}
                         style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", cursor: "pointer" }}
-                        className="hover:bg-white/5 transition-colors"
                       >
                         <img src={c.flag} alt={c.name} style={{ width: 24, height: 16, objectFit: "cover", borderRadius: 2 }} />
                         <span>{c.name}</span>
                       </div>
                   ))}
                   {availableCountries.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())).length === 0 && (
-                    <div style={{ padding: "0.5rem 1rem", color: "var(--muted)" }}>No se encontraron países</div>
+                    <div style={{ padding: "0.5rem 1rem", color: "var(--muted)" }}>{t("tournament_register.no_countries_found")}</div>
                   )}
                 </div>
               )}
@@ -401,7 +401,7 @@ export default function RegisterTeam() {
                 <label className="text-sm text-muted font-medium block mb-2">{field.name}</label>
                 {field.type === "select" ? (
                   <select className="input-base" onChange={e => setTeamAnswers({...teamAnswers, [field.name]: e.target.value})}>
-                    <option value="">Selecciona...</option>
+                    <option value="">{t("tournament_register.select_placeholder")}</option>
                     {field.options?.split(',').map((opt: string) => <option key={opt} value={opt.trim()}>{opt.trim()}</option>)}
                   </select>
                 ) : (
@@ -417,15 +417,15 @@ export default function RegisterTeam() {
         <div className="glass-panel" style={{ padding: "2rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
             <h2 style={{ color: "var(--primary)", margin: 0 }}>
-              {tpl?.is1v1 ? "Tus Datos" : `Jugadores (${players.length} / ${tpl.maxPlayers || 8})`}
+              {tpl?.is1v1 ? t("tournament_register.your_data") : `${t("tournament_detail.players")} (${players.length} / ${tpl.maxPlayers || 8})`}
             </h2>
             {!tpl?.is1v1 && players.length < (tpl.maxPlayers || 8) && (
               <div style={{ display: "flex", gap: "1rem" }}>
                 <button type="button" className="btn btn-secondary" onClick={() => loadFriends(-1)} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <Users size={18} /> Añadir desde Steam
+                  <Users size={18} /> {t("tournament_register.add_from_steam")}
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={handleAddPlayer}>
-                  <Plus size={18} /> Añadir Jugador
+                  <Plus size={18} /> {t("tournament_register.add_player")}
                 </button>
               </div>
             )}
@@ -441,7 +441,7 @@ export default function RegisterTeam() {
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                   <h3 style={{ fontSize: "1.1rem", margin: 0 }}>
-                    {tpl?.is1v1 ? "Información del Jugador" : `Jugador ${index + 1}`} 
+                    {tpl?.is1v1 ? t("tournament_register.player_info") : `${t("tournament_register.player_number")} ${index + 1}`} 
                     {!tpl?.is1v1 && (
                       <span className="text-muted text-sm ml-2">
                         ({index === 0 ? "Captain" : index === 1 ? "Co-Captain" : "Member"})
@@ -452,7 +452,7 @@ export default function RegisterTeam() {
                 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
                   <div>
-                    <label className="text-sm text-muted block mb-1">Nombre (In-Game) *</label>
+                    <label className="text-sm text-muted block mb-1">{t("tournament_register.in_game_name")} *</label>
                     <input required className="input-base" value={player.name} onChange={e => {
                       const newP = [...players];
                       newP[index].name = e.target.value;
@@ -460,7 +460,7 @@ export default function RegisterTeam() {
                     }} />
                   </div>
                   <div>
-                    <label className="text-sm text-muted block mb-1">URL de Steam *</label>
+                    <label className="text-sm text-muted block mb-1">{t("tournament_register.steam_url")} *</label>
                     <input required className="input-base" placeholder="https://steamcommunity.com/id/..." value={player.steam_id_64} onChange={e => {
                       const newP = [...players];
                       newP[index].steam_id_64 = e.target.value;
@@ -485,7 +485,7 @@ export default function RegisterTeam() {
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ fontSize: "1.2rem", padding: "1rem", display: "flex", justifyContent: "center" }}>
-          {isSubmitting ? "Registrando y Validando..." : "Finalizar Registro"}
+          {isSubmitting ? t("tournament_register.submitting") : t("tournament_register.submit_button")}
         </button>
       </form>
 
@@ -497,14 +497,14 @@ export default function RegisterTeam() {
         }}>
           <div className="card" style={{ width: "90%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h3 style={{ margin: 0 }}>Mis Amigos de Steam</h3>
+              <h3 style={{ margin: 0 }}>{t("tournament_register.steam_friends_title")}</h3>
               <button className="btn-icon" onClick={() => setShowFriendsModal(false)}><X size={20} /></button>
             </div>
             
             <input 
               type="text" 
               className="input-base" 
-              placeholder="Buscar amigo por nombre..." 
+              placeholder={t("tournament_register.search_friends_placeholder")} 
               value={friendsSearch}
               onChange={(e) => setFriendsSearch(e.target.value)}
               style={{ marginBottom: "1rem" }}
@@ -512,10 +512,10 @@ export default function RegisterTeam() {
             
             <div style={{ overflowY: "auto", flex: 1 }}>
               {isFriendsLoading ? (
-                <LoadingSpinner text="Cargando amigos..." size={30} />
+                <LoadingSpinner size={30} />
               ) : friends.length === 0 ? (
                 <p style={{ textAlign: "center", padding: "2rem", color: "var(--color-error)" }}>
-                  No se encontraron amigos. Asegúrate de haber iniciado sesión con Steam y tener tu perfil público.
+                  {t("tournament_register.no_friends_found")}
                 </p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -526,8 +526,6 @@ export default function RegisterTeam() {
                            display: "flex", alignItems: "center", gap: "1rem", padding: "0.5rem", 
                            borderRadius: "8px", cursor: "pointer", background: "rgba(255,255,255,0.05)" 
                          }}
-                         onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-                         onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
                     >
                       <img src={friend.avatar} alt={friend.name} style={{ width: 40, height: 40, borderRadius: "50%" }} />
                       <div style={{ flex: 1 }}>
@@ -538,7 +536,7 @@ export default function RegisterTeam() {
                   ))}
                   
                   {friends.filter(f => f.name.toLowerCase().includes(friendsSearch.toLowerCase())).length === 0 && (
-                    <p style={{ textAlign: "center", padding: "1rem", color: "var(--muted)" }}>No hay coincidencias.</p>
+                    <p style={{ textAlign: "center", padding: "1rem", color: "var(--muted)" }}>{t("tournament_register.no_matches")}</p>
                   )}
                 </div>
               )}
